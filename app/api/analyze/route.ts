@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildOllamaSystemPrompt } from "@/lib/ollama";
 
+export const dynamic = "force-static";
+
 export async function POST(req: NextRequest) {
   try {
     const host = req.headers.get("host") || "";

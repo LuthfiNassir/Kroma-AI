@@ -55,3 +55,44 @@ OUTPUT FORMAT: Return ONLY valid JSON matching this exact schema:
 STRICT RULE: Strictly DO NOT use any emojis anywhere in the response text, titles, or labels.
 `;
 }
+
+// Client-side direct Ollama query fallback for desktop webview & static builds
+export async function queryOllamaDirect(prompt: string, model: string = "qwen2.5-coder:7b", systemPrompt?: string) {
+  const endpoint = "http://127.0.0.1:11434/api/chat";
+
+  const messages: any[] = [];
+  if (systemPrompt) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+  messages.push({ role: "user", content: prompt });
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: false,
+      format: "json",
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Ollama communication failed: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  let rawContent = data.message?.content || data.response || "{}";
+
+  // Clean JSON formatting
+  rawContent = rawContent.replace(/```json/gi, "").replace(/```/g, "").trim();
+  const firstBrace = rawContent.indexOf("{");
+  const lastBrace = rawContent.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    rawContent = rawContent.substring(firstBrace, lastBrace + 1);
+  }
+
+  return JSON.parse(rawContent);
+}

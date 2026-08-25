@@ -13,6 +13,7 @@ import {
   parseCsvContent, 
   generateInitialDashboard 
 } from "@/lib/dataEngine";
+import { buildOllamaSystemPrompt, queryOllamaDirect } from "@/lib/ollama";
 import { Sidebar } from "./Sidebar";
 import { BentoGrid } from "./BentoGrid";
 import { ChatPanel } from "./ChatPanel";
@@ -132,26 +133,40 @@ export const Workspace: React.FC = () => {
         })
         .join(", ");
 
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: prompt,
+      let responseData: any;
+      try {
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: prompt,
+            schema: schemaString,
+            sampleData: activeSession.dashboardState.tableData.slice(0, 10),
+          }),
+        });
+
+        const contentType = res.headers.get("content-type") || "";
+        if (!res.ok || contentType.includes("text/html")) {
+          throw new Error("Next API route unavailable in static desktop mode");
+        }
+        responseData = await res.json();
+      } catch (apiErr) {
+        console.warn("API route fallback (Static Desktop Mode). Querying Ollama directly...", apiErr);
+        const systemPrompt = buildOllamaSystemPrompt({
           schema: schemaString,
           sampleData: activeSession.dashboardState.tableData.slice(0, 10),
-        }),
-      });
+        });
+        responseData = await queryOllamaDirect(prompt, "qwen2.5-coder:7b", systemPrompt);
+      }
 
-      const responseData = await res.json();
-
-      if (!res.ok || responseData.error) {
+      if (!responseData || responseData.error) {
         // Kroma engine connection failure
         const errorMsg: ChatMessage = {
           id: `msg_err_${Date.now()}`,
           role: "assistant",
           content:
-            responseData.error ||
-            "[Error: Unable to connect to local Ollama server at http://localhost:11434. Please ensure Ollama is running with model 'qwen2.5-coder:7b'].",
+            responseData?.error ||
+            "[Error: Unable to connect to local Ollama server at http://127.0.0.1:11434. Please ensure Ollama is running with model 'qwen2.5-coder:7b'].",
           isError: true,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         };
@@ -216,7 +231,7 @@ export const Workspace: React.FC = () => {
         id: `msg_err_${Date.now()}`,
         role: "assistant",
         content:
-          "[Error: Unable to connect to local Ollama server at http://localhost:11434. Please ensure Ollama is running with model 'qwen2.5-coder:7b'].",
+          "[Error: Unable to connect to local Ollama server at http://127.0.0.1:11434. Please ensure Ollama is running with model 'qwen2.5-coder:7b'].",
         isError: true,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
