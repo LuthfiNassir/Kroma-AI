@@ -23,6 +23,8 @@ export interface ChartDataSeries {
   data: Record<string, any>[];
   xKey: string;
   yKey: string;
+  xAxisLabel?: string;
+  yAxisLabel?: string;
   analysis?: ChartAnalysis;
 }
 
@@ -82,4 +84,6 @@ export interface AnalysisResponse {
   chartType: "bar" | "line" | "pie" | "none";
   chartData?: ChartDataItem[] | null;
   chartTitle?: string | null;
+  xAxisLabel?: string | null;
+  yAxisLabel?: string | null;
 }

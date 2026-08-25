@@ -52,6 +52,10 @@ export const ChartCard: React.FC<ChartCardProps> = ({
   }
 
   const chartType = series.type && series.type !== "none" ? series.type : defaultType;
+  const isMultiCohort = series.data.length >= 4;
+
+  const xAxisTitle = series.xAxisLabel || series.xKey;
+  const yAxisTitle = series.yAxisLabel || series.yKey;
 
   return (
     <div
@@ -76,7 +80,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
             {series.title || "[Data Visualization]"}
           </h3>
           <p className="text-[11px] text-white/50 tracking-wider font-mono">
-            Axis: {series.xKey} vs {series.yKey}
+            Axis: {xAxisTitle} vs {yAxisTitle}
           </p>
         </div>
         <div className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/70 shrink-0">
@@ -88,7 +92,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
       <div className="w-full h-[240px] relative">
         <ResponsiveContainer width="100%" height="100%">
           {chartType === "area" ? (
-            <AreaChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <AreaChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 25 : 0 }}>
               <defs>
                 <linearGradient id="colorCoralCard" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={accentColor} stopOpacity={0.8} />
@@ -99,8 +103,11 @@ export const ChartCard: React.FC<ChartCardProps> = ({
               <XAxis
                 dataKey={series.xKey}
                 stroke="rgba(255, 255, 255, 0.4)"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
+                interval={0}
+                angle={isMultiCohort ? -20 : 0}
+                textAnchor={isMultiCohort ? "end" : "middle"}
               />
               <YAxis
                 stroke="rgba(255, 255, 255, 0.4)"
@@ -126,13 +133,16 @@ export const ChartCard: React.FC<ChartCardProps> = ({
               />
             </AreaChart>
           ) : chartType === "line" ? (
-            <LineChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <LineChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 25 : 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
               <XAxis
                 dataKey={series.xKey}
                 stroke="rgba(255, 255, 255, 0.4)"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
+                interval={0}
+                angle={isMultiCohort ? -20 : 0}
+                textAnchor={isMultiCohort ? "end" : "middle"}
               />
               <YAxis
                 stroke="rgba(255, 255, 255, 0.4)"
@@ -189,13 +199,16 @@ export const ChartCard: React.FC<ChartCardProps> = ({
               </Pie>
             </PieChart>
           ) : (
-            <BarChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 30 : 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
               <XAxis
                 dataKey={series.xKey}
                 stroke="rgba(255, 255, 255, 0.4)"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
+                interval={0}
+                angle={isMultiCohort ? -25 : 0}
+                textAnchor={isMultiCohort ? "end" : "middle"}
               />
               <YAxis
                 stroke="rgba(255, 255, 255, 0.4)"

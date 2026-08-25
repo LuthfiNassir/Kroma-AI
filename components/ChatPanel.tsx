@@ -10,6 +10,82 @@ interface ChatPanelProps {
   isLoading: boolean;
 }
 
+// Lightweight structured markdown renderer
+const FormattedMarkdown: React.FC<{ content: string }> = ({ content }) => {
+  if (!content) return null;
+
+  // Split into paragraphs/blocks
+  const blocks = content.split(/\n\n+/);
+
+  return (
+    <div className="space-y-3 font-sans text-xs leading-relaxed text-white/90">
+      {blocks.map((block, bIdx) => {
+        const trimmed = block.trim();
+        if (!trimmed) return null;
+
+        // Check if block starts with a bold header like **[Direct Answer]** or **[Key Drivers]**
+        const isHeaderBlock = trimmed.startsWith("**[") && trimmed.includes("]**");
+
+        if (isHeaderBlock) {
+          const closingIndex = trimmed.indexOf("]**");
+          const headerText = trimmed.substring(3, closingIndex); // Extract text inside [ ]
+          const restText = trimmed.substring(closingIndex + 3).trim();
+
+          return (
+            <div key={bIdx} className="space-y-1.5 pt-1">
+              <div className="inline-block rounded-md bg-[#FE6749]/15 border border-[#FE6749]/30 px-2 py-0.5 text-[11px] font-mono font-bold text-[#FE6749] uppercase tracking-wider">
+                [{headerText}]
+              </div>
+              {restText && <div className="text-white/85 pl-0.5">{renderFormattedText(restText)}</div>}
+            </div>
+          );
+        }
+
+        // Bullet point list block
+        if (trimmed.includes("\n- ") || trimmed.startsWith("- ")) {
+          const lines = trimmed.split("\n");
+          return (
+            <ul key={bIdx} className="space-y-1.5 pl-1 my-1">
+              {lines.map((line, lIdx) => {
+                const cleanLine = line.replace(/^- /, "").trim();
+                if (!cleanLine) return null;
+                return (
+                  <li key={lIdx} className="flex items-start gap-2 text-white/85">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#FE6749] shrink-0 mt-1.5" />
+                    <span>{renderFormattedText(cleanLine)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        }
+
+        // Normal paragraph
+        return (
+          <p key={bIdx} className="text-white/85">
+            {renderFormattedText(trimmed)}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
+// Inline bolding parser helper
+function renderFormattedText(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={idx} className="font-semibold text-white">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
+}
+
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
   onSendMessage,
@@ -21,9 +97,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   const suggestions = [
     "tell me what all factors affect a person to get a stroke",
-    "Summarize key trends",
-    "Show risk distribution by age",
-    "Top category breakdown",
+    "What factors make users cancel their subscription?",
+    "Why are employees leaving the company?",
+    "Which profiles represent highest default risk?",
   ];
 
   const scrollToBottom = () => {
@@ -65,7 +141,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               [Kroma Autonomous Intelligence]
             </h3>
             <p className="text-xs text-white/50 max-w-sm">
-              Ask natural language queries or custom metric plotting requests. All answers and custom charts render inline in this chat stream without altering your main Bento Grid dashboard.
+              Ask natural language queries across any dataset domain. All answers, multi-cohort comparisons, and SQL blocks render inline in this thread.
             </p>
           </div>
         ) : (
@@ -124,35 +200,33 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     </span>
                   </div>
 
-                  {/* Main Explanation */}
-                  <p className="text-xs text-white/80 leading-relaxed">
-                    {msg.content}
-                  </p>
+                  {/* Main Formatted Explanation */}
+                  <FormattedMarkdown content={msg.content} />
 
                   {/* Inline Question-Specific Chart */}
                   {msg.inlineChart && (
                     <div className="space-y-1.5 pt-1">
                       <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#FE6749] uppercase tracking-wider">
                         <BarChart2 className="w-3.5 h-3.5" />
-                        <span>[Inline Query Visualization]</span>
+                        <span>[Multi-Cohort Comparison]</span>
                       </div>
                       <ChartCard
                         series={msg.inlineChart}
                         defaultType={msg.inlineChart.type || "bar"}
                         accentColor="#FE6749"
                         secondaryColor="#A5329E"
-                        className="min-h-[260px] p-4 bg-[#212222] border-white/10 cursor-default"
+                        className="min-h-[280px] p-4 bg-[#212222] border-white/10 cursor-default"
                       />
                     </div>
                   )}
 
-                  {/* Key Takeaway Banner */}
+                  {/* Executive Takeaway Banner */}
                   {msg.insight && (
                     <div className="rounded-xl bg-[#A5329E]/10 border-l-2 border-[#A5329E] p-3 text-xs text-white/90 flex items-start gap-2">
                       <Sparkles className="w-4 h-4 text-[#A5329E] shrink-0 mt-0.5" />
                       <div>
                         <span className="font-semibold text-[#FE88ED] block text-[11px] uppercase tracking-wider mb-0.5 font-mono">
-                          [Strategic Takeaway]
+                          [Executive Takeaway]
                         </span>
                         <p className="text-white/80">{msg.insight}</p>
                       </div>
