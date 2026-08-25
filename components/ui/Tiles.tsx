@@ -23,20 +23,20 @@ export function Tiles({ className }: { className?: string }) {
     >
       <div className="flex pointer-events-auto">
         {rowsArray.map((_, i) => (
-          <div key={`row-${i}`} className="w-12 h-12 border-l border-white/[0.06] shrink-0">
+          <div key={`row-${i}`} className="flex flex-col shrink-0">
             {colsArray.map((_, j) => (
               <motion.div
                 key={`col-${j}`}
                 whileHover={{
-                  backgroundColor: "rgba(254, 103, 73, 0.25)",
-                  borderColor: "rgba(254, 103, 73, 0.5)",
+                  backgroundColor: "rgba(254, 103, 73, 0.3)",
+                  borderColor: "rgba(254, 103, 73, 0.6)",
                   transition: { duration: 0 },
                 }}
                 animate={{
                   backgroundColor: "transparent",
                   transition: { duration: 1.5 },
                 }}
-                className="w-12 h-12 border-r border-t border-white/[0.06] transition-colors duration-500 cursor-crosshair"
+                className="w-12 h-12 border-r border-b border-white/[0.08] transition-colors duration-500 cursor-crosshair"
               />
             ))}
           </div>

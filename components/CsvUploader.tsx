@@ -106,28 +106,20 @@ export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
 
         {/* Clean Demo Sample Buttons */}
         <div className="flex items-center justify-center gap-2 flex-wrap pt-2 font-sans">
-          <span className="text-xs text-white/50">Or try sample demo:</span>
-          <button
-            type="button"
-            onClick={() => onUploadCsv(SAMPLE_DATASETS.sales, "sample_sales.csv")}
-            className="rounded-full px-3.5 py-1 bg-white/5 border border-white/10 text-xs font-medium text-white/80 hover:border-[#FE6749]/60 hover:text-white hover:bg-white/10 transition-all shadow-sm cursor-pointer"
-          >
-            [Sample: Sales]
-          </button>
-          <button
-            type="button"
-            onClick={() => onUploadCsv(SAMPLE_DATASETS.department, "sample_department.csv")}
-            className="rounded-full px-3.5 py-1 bg-white/5 border border-white/10 text-xs font-medium text-white/80 hover:border-[#FE6749]/60 hover:text-white hover:bg-white/10 transition-all shadow-sm cursor-pointer"
-          >
-            [Sample: Department]
-          </button>
-          <button
-            type="button"
-            onClick={() => onUploadCsv(SAMPLE_DATASETS.marketing, "sample_marketing.csv")}
-            className="rounded-full px-3.5 py-1 bg-white/5 border border-white/10 text-xs font-medium text-white/80 hover:border-[#FE6749]/60 hover:text-white hover:bg-white/10 transition-all shadow-sm cursor-pointer"
-          >
-            [Sample: Marketing]
-          </button>
+          <span className="text-xs text-white/50 font-sans">Or try sample demo:</span>
+          {["Sales", "Department", "Marketing"].map((sample) => {
+            const sampleKey = sample.toLowerCase() as "sales" | "department" | "marketing";
+            return (
+              <button
+                key={sample}
+                type="button"
+                onClick={() => onUploadCsv(SAMPLE_DATASETS[sampleKey], `sample_${sampleKey}.csv`)}
+                className="rounded-full px-3.5 py-1 bg-white/5 border border-white/10 text-xs font-medium text-white/80 hover:border-[#FE6749]/60 hover:text-white hover:bg-white/10 transition-all shadow-sm cursor-pointer font-sans"
+              >
+                {`[Sample: ${sample}]`}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
