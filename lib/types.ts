@@ -1,3 +1,17 @@
+export type ChartType =
+  | "bar"
+  | "line"
+  | "pie"
+  | "area"
+  | "histogram"
+  | "scatter"
+  | "bubble"
+  | "boxplot"
+  | "heatmap"
+  | "treemap"
+  | "sankey"
+  | "none";
+
 export interface KPICardData {
   label: string;
   value: string | number;
@@ -18,13 +32,14 @@ export interface ChartAnalysis {
 
 export interface ChartDataSeries {
   id?: string;
-  type: "bar" | "line" | "pie" | "scatter" | "area" | "none";
+  type: ChartType;
   title: string;
-  data: Record<string, any>[];
-  xKey: string;
-  yKey: string;
   xAxisLabel?: string;
   yAxisLabel?: string;
+  zAxisLabel?: string;
+  data: Record<string, any>[];
+  xKey?: string;
+  yKey?: string;
   analysis?: ChartAnalysis;
 }
 
@@ -72,18 +87,14 @@ export interface AnalysisSession {
   dashboardState: DashboardState;
 }
 
-export interface ChartDataItem {
-  label: string;
-  value: number;
-}
-
 export interface AnalysisResponse {
   explanation: string;
   insight: string;
   sql: string | null;
-  chartType: "bar" | "line" | "pie" | "none";
-  chartData?: ChartDataItem[] | null;
+  chartType: ChartType;
   chartTitle?: string | null;
   xAxisLabel?: string | null;
   yAxisLabel?: string | null;
+  zAxisLabel?: string | null;
+  chartData?: Record<string, any>[] | null;
 }

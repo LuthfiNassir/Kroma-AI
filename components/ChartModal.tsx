@@ -1,30 +1,12 @@
 import React, { useEffect } from "react";
-import { X, Sparkles, TrendingUp, BarChart2, HelpCircle, Activity } from "lucide-react";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  AreaChart,
-  Area,
-} from "recharts";
+import { X, Sparkles, BarChart2 } from "lucide-react";
 import { ChartDataSeries } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { ChartCard } from "./ChartCard";
 
 interface ChartModalProps {
   chart: ChartDataSeries | null;
   onClose: () => void;
 }
-
-const COLOR_PALETTE = ["#FE6749", "#A5329E", "#FE88ED", "#FF9E88", "#7D2277", "#D44333"];
 
 export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
   // Close on Escape key
@@ -39,8 +21,6 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
   }, [onClose]);
 
   if (!chart) return null;
-
-  const chartType = chart.type || "bar";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 overflow-y-auto">
@@ -80,102 +60,12 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
 
         {/* Body Layout: 60% Left Graph / 40% Right Analytical Narrative */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Panel (60% width) */}
+          {/* Left Panel (60% width) - Polymorphic Chart Engine */}
           <div className="lg:col-span-7 rounded-2xl bg-[#212222] border border-white/10 p-5 flex flex-col justify-between min-h-[380px] shadow-inner">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-mono text-white/50 uppercase tracking-widest">
-                [Interactive Visual Canvas]
-              </span>
-              <span className="text-[10px] font-mono text-white/40">
-                {chart.xKey} vs {chart.yKey}
-              </span>
-            </div>
-
-            <div className="w-full h-[320px] relative">
-              <ResponsiveContainer width="100%" height="100%">
-                {chartType === "area" ? (
-                  <AreaChart data={chart.data} margin={{ top: 15, right: 15, left: -10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorCoralModal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#FE6749" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#FE6749" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" />
-                    <XAxis dataKey={chart.xKey} stroke="rgba(255, 255, 255, 0.5)" fontSize={12} tickLine={false} />
-                    <YAxis stroke="rgba(255, 255, 255, 0.5)" fontSize={12} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#212222",
-                        borderColor: "rgba(255, 255, 255, 0.2)",
-                        borderRadius: "14px",
-                        color: "#ffffff",
-                        fontSize: "13px",
-                      }}
-                    />
-                    <Area type="monotone" dataKey={chart.yKey} stroke="#FE6749" strokeWidth={3} fillOpacity={1} fill="url(#colorCoralModal)" />
-                  </AreaChart>
-                ) : chartType === "line" ? (
-                  <LineChart data={chart.data} margin={{ top: 15, right: 15, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" />
-                    <XAxis dataKey={chart.xKey} stroke="rgba(255, 255, 255, 0.5)" fontSize={12} tickLine={false} />
-                    <YAxis stroke="rgba(255, 255, 255, 0.5)" fontSize={12} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#212222",
-                        borderColor: "rgba(255, 255, 255, 0.2)",
-                        borderRadius: "14px",
-                        color: "#ffffff",
-                        fontSize: "13px",
-                      }}
-                    />
-                    <Line type="monotone" dataKey={chart.yKey} stroke="#FE6749" strokeWidth={3.5} dot={{ fill: "#FE6749", r: 5 }} activeDot={{ r: 8, fill: "#ffffff" }} />
-                  </LineChart>
-                ) : chartType === "pie" ? (
-                  <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#212222",
-                        borderColor: "rgba(255, 255, 255, 0.2)",
-                        borderRadius: "14px",
-                        color: "#ffffff",
-                        fontSize: "13px",
-                      }}
-                    />
-                    <Pie
-                      data={chart.data}
-                      dataKey={chart.yKey}
-                      nameKey={chart.xKey}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={70}
-                      outerRadius={110}
-                      paddingAngle={5}
-                    >
-                      {chart.data.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLOR_PALETTE[index % COLOR_PALETTE.length]} stroke="#18191b" strokeWidth={2} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                ) : (
-                  <BarChart data={chart.data} margin={{ top: 15, right: 15, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" />
-                    <XAxis dataKey={chart.xKey} stroke="rgba(255, 255, 255, 0.5)" fontSize={12} tickLine={false} />
-                    <YAxis stroke="rgba(255, 255, 255, 0.5)" fontSize={12} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#212222",
-                        borderColor: "rgba(255, 255, 255, 0.2)",
-                        borderRadius: "14px",
-                        color: "#ffffff",
-                        fontSize: "13px",
-                      }}
-                    />
-                    <Bar dataKey={chart.yKey} fill="#A5329E" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                )}
-              </ResponsiveContainer>
-            </div>
+            <ChartCard
+              series={chart}
+              className="bg-transparent border-0 shadow-none hover:border-transparent p-0 min-h-[340px] cursor-default"
+            />
           </div>
 
           {/* Right Panel (40% width): Structured Analytical Narrative */}
@@ -187,7 +77,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
               </span>
               <p className="text-xs text-white/90 leading-relaxed font-sans bg-white/[0.03] p-3 rounded-xl border border-white/5">
                 {chart.analysis?.whatItShows ||
-                  `This chart plots how ${chart.yKey} is distributed across ${chart.xKey}.`}
+                  `This visualization presents multi-dimensional statistical patterns across ${chart.xAxisLabel || "Category"} and ${chart.yAxisLabel || "Value"}.`}
               </p>
             </div>
 
@@ -198,7 +88,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
               </span>
               <p className="text-xs text-white/80 leading-relaxed font-sans bg-white/[0.02] p-3 rounded-xl border border-white/5">
                 {chart.analysis?.trend ||
-                  `Values move through peaks and dips across periods. Overall numbers demonstrate solid performance strength.`}
+                  `Values move through observable variance across cohorts. Overall metrics demonstrate clear distribution shifts.`}
               </p>
             </div>
 
@@ -236,7 +126,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
               </div>
               <p className="text-xs text-white/90 leading-relaxed">
                 {chart.analysis?.takeaway ||
-                  "Focus resource allocation on identified peak categories to maximize overall return."}
+                  "Focus strategic resource allocation on identified high-value cohorts to optimize overall output."}
               </p>
             </div>
           </div>

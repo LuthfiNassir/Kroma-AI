@@ -156,7 +156,7 @@ export const Workspace: React.FC = () => {
         return;
       }
 
-      // Success - parse payload from Kroma Intelligence
+      // Success - parse dynamic payload from Kroma Intelligence
       let inlineChart: ChartDataSeries | null = null;
       if (
         responseData.chartType &&
@@ -165,18 +165,16 @@ export const Workspace: React.FC = () => {
         Array.isArray(responseData.chartData) &&
         responseData.chartData.length > 0
       ) {
-        const formattedChartData = responseData.chartData.map((item: any) => ({
-          label: String(item.label || "Segment"),
-          value: Number(item.value) || 0,
-        }));
-
         inlineChart = {
           id: `inline_${Date.now()}`,
           type: responseData.chartType,
           title: responseData.chartTitle || "Query Analysis",
-          data: formattedChartData,
+          data: responseData.chartData,
           xKey: "label",
           yKey: "value",
+          xAxisLabel: responseData.xAxisLabel || "Category",
+          yAxisLabel: responseData.yAxisLabel || "Value",
+          zAxisLabel: responseData.zAxisLabel || undefined,
         };
       }
 
