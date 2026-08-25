@@ -14,16 +14,16 @@ interface RadialGradientProps {
 
 export function RadialGradient({
   className,
-  gradientFrom = "rgba(165, 50, 158, 0.18)",
-  gradientTo = "#212222",
-  gradientSize = "120% 120%",
-  gradientPosition = "50% 0%",
+  gradientFrom = "rgba(165, 50, 158, 0.35)",
+  gradientTo = "#18191b",
+  gradientSize = "100% 100%",
+  gradientPosition = "50% 20%",
   gradientStop = "0%",
 }: RadialGradientProps) {
   return (
     <div
       className={cn(
-        "absolute inset-0 w-full h-full -z-20 pointer-events-none",
+        "absolute inset-0 w-full h-full pointer-events-none z-0",
         className
       )}
       style={{

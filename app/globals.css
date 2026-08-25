@@ -12,6 +12,8 @@
   --text-primary: #FFFFFF;
   --text-muted: rgba(255, 255, 255, 0.55);
   --border-card: rgba(255, 255, 255, 0.10);
+  --tile-hover: rgba(254, 103, 73, 0.35);
+  --tile-border: rgba(255, 255, 255, 0.08);
 }
 
 /* Noise Grain Overlay */
@@ -32,6 +34,11 @@ body::before {
 .mask-radial-fade {
   mask-image: radial-gradient(circle at 50% 35%, black 20%, transparent 80%);
   -webkit-mask-image: radial-gradient(circle at 50% 35%, black 20%, transparent 80%);
+}
+
+.mask-radial-vignette {
+  mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
 }
 
 body {
