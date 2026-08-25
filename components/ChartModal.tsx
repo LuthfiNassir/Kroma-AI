@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect } from "react";
 import { X, Sparkles, BarChart2 } from "lucide-react";
 import { ChartDataSeries } from "@/lib/types";
@@ -23,7 +25,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
   if (!chart) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 overflow-y-auto font-sans">
       {/* Backdrop */}
       <div
         onClick={onClose}

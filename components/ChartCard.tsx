@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { Maximize2 } from "lucide-react";
 import {
@@ -238,7 +240,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
     <div
       onClick={onClick}
       className={cn(
-        "rounded-3xl bg-[#18191b] border border-white/10 p-6 min-h-[320px] flex flex-col justify-between shadow-xl relative overflow-hidden cursor-pointer hover:border-[#FE6749]/50 transition-all duration-200 group",
+        "rounded-3xl bg-[#18191b] border border-white/10 p-6 min-h-[340px] flex flex-col justify-between shadow-xl relative overflow-hidden cursor-pointer hover:border-[#FE6749]/50 transition-all duration-200 group",
         className
       )}
     >
@@ -265,8 +267,8 @@ export const ChartCard: React.FC<ChartCardProps> = ({
         </div>
       </div>
 
-      {/* Chart Canvas */}
-      <div className="w-full h-[240px] relative">
+      {/* Explicit Height Chart Canvas Container */}
+      <div className="w-full h-[260px] min-h-[260px] relative font-mono">
         {chartType === "boxplot" ? (
           <CustomBoxPlotRenderer data={series.data} accentColor={accentColor} />
         ) : chartType === "heatmap" ? (

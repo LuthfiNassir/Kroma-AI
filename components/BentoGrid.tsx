@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from "react";
 import { DashboardState, ChartDataSeries } from "@/lib/types";
 import { MetricCard } from "./MetricCard";
@@ -32,20 +34,24 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
         ))}
       </div>
 
-      {/* 2. AUTONOMOUS DYNAMIC BENTO GRID (12-Column Responsive Layout for 6-12 Widgets) */}
+      {/* 2. AUTONOMOUS DYNAMIC BENTO GRID (12-Column Responsive Layout) */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         {charts.map((chartWidget, idx) => {
-          // Dynamic Column Span Mapping
+          // Dynamic Column Span Mapping as specified:
+          // Chart 1 (Age Distribution): md:col-span-8
+          // Chart 2 (Gender Donut): md:col-span-4
+          // Chart 3 (Stroke Rate): md:col-span-6
+          // Chart 4 (Glucose Distribution): md:col-span-6
+          // Chart 5 (Work Type): md:col-span-6
+          // Chart 6 (Smoking Risk): md:col-span-6
           let colSpanClass = "md:col-span-6";
 
-          if (chartWidget.type === "area" || idx === 0) {
+          if (idx === 0) {
             colSpanClass = "md:col-span-8";
-          } else if (chartWidget.type === "pie") {
+          } else if (idx === 1 || chartWidget.type === "pie") {
             colSpanClass = "md:col-span-4";
-          } else if (chartWidget.type === "heatmap" || chartWidget.type === "sankey" || chartWidget.type === "boxplot") {
+          } else if (chartWidget.type === "area" || idx % 5 === 0) {
             colSpanClass = "md:col-span-6";
-          } else if (idx % 5 === 0) {
-            colSpanClass = "md:col-span-8";
           }
 
           return (
