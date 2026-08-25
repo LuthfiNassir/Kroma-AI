@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "tauri": "tauri",
-    "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:dev": "powershell -Command \"$env:PATH = '$env:USERPROFILE\\.cargo\\bin;' + $env:PATH; tauri dev\"",
+    "desktop:build": "powershell -Command \"$env:PATH = '$env:USERPROFILE\\.cargo\\bin;' + $env:PATH; tauri build\""
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
