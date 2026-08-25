@@ -38,15 +38,15 @@ export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
 
   return (
     <div className="relative min-h-[calc(100vh-60px)] w-full flex flex-col items-center justify-center p-6 overflow-hidden bg-[#212222]">
-      {/* 1. Background Ambient Glow (Layer 0, z-0) */}
+      {/* 1. Background Ambient Glow (fixed z-0) */}
       <RadialGradient />
 
-      {/* 2. Interactive Animated Tiles Grid (Layer 1, z-[1]) */}
+      {/* 2. Interactive Animated Tiles Grid (fixed z-0) */}
       <Tiles />
 
-      {/* 3. Foreground Content (Layer 2, relative z-10) */}
+      {/* 3. Foreground Content (relative z-10) */}
       <div className="relative z-10 max-w-2xl w-full text-center space-y-6 pointer-events-auto">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/15 backdrop-blur-md">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/5 border border-white/15 backdrop-blur-md">
           <BrandMark className="w-4 h-4" />
           <span className="text-[11px] font-mono tracking-widest text-[#FE6749] uppercase font-bold">
             KROMA · AUTONOMOUS DATA INTELLIGENCE
@@ -91,11 +91,11 @@ export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
             onChange={handleFileChange}
           />
 
-          <div className="flex flex-col items-center space-y-3">
+          <div className="flex flex-col items-center space-y-3 font-sans">
             <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center text-white/80">
               <BrandMark className="w-6 h-6" />
             </div>
-            <div className="text-sm font-semibold text-white font-sans">
+            <div className="text-sm font-semibold text-white">
               Drag & drop your CSV file here, or <span className="text-[#FE6749] underline decoration-1 underline-offset-4">[browse]</span>
             </div>
             <div className="text-xs text-white/40 font-mono">
@@ -104,27 +104,27 @@ export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
           </div>
         </div>
 
-        {/* Sample Datasets */}
-        <div className="flex items-center justify-center gap-2 flex-wrap pt-2">
-          <span className="text-xs text-white/40 font-mono">[Or try sample demo]:</span>
+        {/* Clean Demo Sample Buttons */}
+        <div className="flex items-center justify-center gap-2 flex-wrap pt-2 font-sans">
+          <span className="text-xs text-white/50">Or try sample demo:</span>
           <button
             type="button"
             onClick={() => onUploadCsv(SAMPLE_DATASETS.sales, "sample_sales.csv")}
-            className="rounded-full px-3 py-1 bg-white/5 border border-white/15 text-xs text-white/80 hover:border-[#FE6749]/60 hover:text-white transition font-mono cursor-pointer"
+            className="rounded-full px-3.5 py-1 bg-white/5 border border-white/10 text-xs font-medium text-white/80 hover:border-[#FE6749]/60 hover:text-white hover:bg-white/10 transition-all shadow-sm cursor-pointer"
           >
             [Sample: Sales]
           </button>
           <button
             type="button"
             onClick={() => onUploadCsv(SAMPLE_DATASETS.department, "sample_department.csv")}
-            className="rounded-full px-3 py-1 bg-white/5 border border-white/15 text-xs text-white/80 hover:border-[#FE6749]/60 hover:text-white transition font-mono cursor-pointer"
+            className="rounded-full px-3.5 py-1 bg-white/5 border border-white/10 text-xs font-medium text-white/80 hover:border-[#FE6749]/60 hover:text-white hover:bg-white/10 transition-all shadow-sm cursor-pointer"
           >
             [Sample: Department]
           </button>
           <button
             type="button"
             onClick={() => onUploadCsv(SAMPLE_DATASETS.marketing, "sample_marketing.csv")}
-            className="rounded-full px-3 py-1 bg-white/5 border border-white/15 text-xs text-white/80 hover:border-[#FE6749]/60 hover:text-white transition font-mono cursor-pointer"
+            className="rounded-full px-3.5 py-1 bg-white/5 border border-white/10 text-xs font-medium text-white/80 hover:border-[#FE6749]/60 hover:text-white hover:bg-white/10 transition-all shadow-sm cursor-pointer"
           >
             [Sample: Marketing]
           </button>
