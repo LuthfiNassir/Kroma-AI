@@ -95,16 +95,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 }) => {
   const [openSqlId, setOpenSqlId] = useState<string | null>(null);
   const [inputPrompt, setInputPrompt] = useState("");
+  const [activeSuggestions, setActiveSuggestions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const defaultSuggestions = [
-    "Which product generates highest revenue?",
-    "Show average order value by item",
-    "Compare unit sales vs revenue",
-    "Summarize top performing categories",
+    "Summarize primary dataset trends",
+    "Identify top 10% outlier cohorts",
+    "Show primary category distributions",
+    "Compare key metrics across segments",
   ];
 
-  const activeSuggestions = suggestions && suggestions.length > 0 ? suggestions : defaultSuggestions;
+  // Dynamic Suggestion Chip Re-binding
+  useEffect(() => {
+    if (suggestions && suggestions.length > 0) {
+      setActiveSuggestions(suggestions);
+    } else {
+      setActiveSuggestions(defaultSuggestions);
+    }
+  }, [suggestions]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -155,7 +163,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             if (isUser) {
               return (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="rounded-2xl rounded-tr-sm bg-white/10 border border-white/15 px-4 py-2.5 text-sm text-white max-w-[80%] shadow-sm">
+                  <div className="rounded-2xl rounded-tr-sm bg-white/10 border border-white/15 px-4 py-2.5 text-sm text-white max-w-[80%] shadow-sm font-sans">
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                     <span className="text-[9px] text-white/40 block text-right mt-1 font-mono">
                       {msg.timestamp}
@@ -289,7 +297,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {/* 2. DOCKED COMPOSER FOOTER */}
       <div className="shrink-0 p-4 pt-2 border-t border-white/10 bg-[#212222] space-y-2">
-        {/* Suggestion Chips */}
+        {/* Dynamic Dataset Suggestion Chips */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {activeSuggestions.map((s, i) => (
             <button

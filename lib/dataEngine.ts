@@ -9,6 +9,8 @@ export interface ParsedCsvResult {
   nonAdditiveNumericColumns: string[];
   additiveNumericColumns: string[];
   categoricalColumns: string[];
+  lowCardinalityCategories: string[];
+  highCardinalityTextColumns: string[];
   dateColumns: string[];
   rowCount: number;
 }
@@ -28,6 +30,8 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
   const nonAdditiveNumericColumns: string[] = [];
   const additiveNumericColumns: string[] = [];
   const categoricalColumns: string[] = [];
+  const lowCardinalityCategories: string[] = [];
+  const highCardinalityTextColumns: string[] = [];
   const dateColumns: string[] = [];
 
   columns.forEach((col) => {
@@ -40,7 +44,8 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
       colLower.endsWith("id") ||
       colLower === "code" ||
       colLower.endsWith("_code") ||
-      colLower === "ssn";
+      colLower === "ssn" ||
+      colLower === "ticket";
 
     if (isIdCol) {
       idColumns.push(col);
@@ -82,6 +87,7 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
 
       const isTargetName =
         colLower.includes("stroke") ||
+        colLower.includes("survived") ||
         colLower.includes("churn") ||
         colLower.includes("hypertension") ||
         colLower.includes("heart_disease") ||
@@ -109,7 +115,9 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
         colLower.includes("percent") ||
         colLower.includes("ratio") ||
         colLower.includes("delay") ||
-        colLower.includes("tenure");
+        colLower.includes("tenure") ||
+        colLower.includes("pclass") ||
+        colLower.includes("fare");
 
       if (isNonAdditiveName) {
         nonAdditiveNumericColumns.push(col);
@@ -118,6 +126,14 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
       }
     } else {
       categoricalColumns.push(col);
+
+      // STRICT CARDINALITY CHECK (Pie/Donut charts strictly forbidden for > 6 unique values)
+      const uniqueStrings = Array.from(new Set(sampleValues.map((v) => String(v).trim())));
+      if (uniqueStrings.length >= 2 && uniqueStrings.length <= 6) {
+        lowCardinalityCategories.push(col);
+      } else {
+        highCardinalityTextColumns.push(col);
+      }
     }
   });
 
@@ -130,7 +146,6 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
         if (additiveNumericColumns.includes(col)) {
           newRow[col] = 0;
         } else if (nonAdditiveNumericColumns.includes(col)) {
-          // Impute continuous numeric with median
           const validVals = rawData
             .map((r) => Number(r[col]))
             .filter((v) => !isNaN(v))
@@ -152,12 +167,14 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
     nonAdditiveNumericColumns,
     additiveNumericColumns,
     categoricalColumns,
+    lowCardinalityCategories,
+    highCardinalityTextColumns,
     dateColumns,
     rowCount: imputedData.length,
   };
 }
 
-// STEP 1.4: ARCHETYPE CLASSIFICATION ENGINE
+// ARCHETYPE CLASSIFICATION ENGINE
 export function detectDatasetArchetype(parsed: ParsedCsvResult): DatasetArchetype {
   const { dateColumns, additiveNumericColumns, nonAdditiveNumericColumns, categoricalColumns, columns } = parsed;
   const colStr = columns.join(" ").toLowerCase();
@@ -208,48 +225,32 @@ export function detectDatasetArchetype(parsed: ParsedCsvResult): DatasetArchetyp
     return "CATEGORICAL_OPERATIONAL";
   }
 
-  // 4. CROSS SECTIONAL DISCOVERY ARCHETYPE (Default multi-variable / healthcare / demographics)
+  // 4. CROSS SECTIONAL DISCOVERY ARCHETYPE (Default Titanic, Healthcare, Demographics, Survey)
   return "CROSS_SECTIONAL_DISCOVERY";
 }
 
-// STEP 1.5: DYNAMIC DATASET SUGGESTIONS GENERATOR
-export function generateDatasetSuggestions(archetype: DatasetArchetype, columns: string[]): string[] {
-  if (archetype === "FINANCIAL") {
-    return [
-      "Which category accounts for the largest spending leak?",
-      "Project total annual runway based on current burn rate",
-      "Show month-over-month revenue velocity",
-      "Summarize top profit contributors",
-    ];
-  }
+// DYNAMIC DATASET-AWARE SUGGESTIONS ENGINE (Column-Based Prompt Synthesis)
+export function generateDynamicSuggestions(parsed: ParsedCsvResult): string[] {
+  const { columns, binaryTargetColumns, additiveNumericColumns, nonAdditiveNumericColumns, lowCardinalityCategories, categoricalColumns } = parsed;
 
-  if (archetype === "QUANTITATIVE_PROGRESS") {
-    return [
-      "Calculate 7-day moving average trajectory",
-      "What is the net delta between baseline and peak performance?",
-      "Project milestone completion date",
-      "Identify high-variance streak periods",
-    ];
-  }
+  const targetCol = binaryTargetColumns[0] || "";
+  const primaryNumeric = additiveNumericColumns[0] || nonAdditiveNumericColumns[0] || columns.find((c) => !parsed.idColumns.includes(c)) || "Value";
+  const primaryCategory = lowCardinalityCategories[0] || categoricalColumns.find((c) => !parsed.highCardinalityTextColumns.includes(c)) || "Category";
+  const secondaryCategory = lowCardinalityCategories[1] || nonAdditiveNumericColumns[1] || primaryNumeric;
 
-  if (archetype === "CATEGORICAL_OPERATIONAL") {
-    return [
-      "Identify primary stage bottlenecks in the workflow",
-      "What is the overall throughput conversion ratio?",
-      "Show priority distribution across active tickets",
-      "Summarize team capacity utilization",
-    ];
-  }
+  const targetName = targetCol ? targetCol.replace(/_/g, " ") : primaryNumeric.replace(/_/g, " ");
+  const catName = primaryCategory.replace(/_/g, " ");
+  const secName = secondaryCategory.replace(/_/g, " ");
 
   return [
-    "What key factors correlate highest with risk/outcomes?",
-    "Show primary metric binned distributions",
-    "Compare target rates across demographic categories",
-    "Identify top 10% statistical outlier cohorts",
+    `What factors most strongly correlate with ${targetName}?`,
+    `Compare ${primaryNumeric.replace(/_/g, " ")} distribution across ${catName}`,
+    `Show breakdown of ${catName} vs ${secName}`,
+    "Identify primary outliers and key cohorts in this dataset",
   ];
 }
 
-// STEP 3: FUTURE PATH & WHAT-IF ENGINE TRAJECTORY CALCULATOR
+// TRAJECTORY GENERATOR
 export function generateProjectionTrajectory(
   data: Record<string, any>[],
   xCol: string,
@@ -267,7 +268,6 @@ export function generateProjectionTrajectory(
 
   if (points.length === 0) return trajectory;
 
-  // Add historical points
   points.forEach((p) => {
     trajectory.push({
       x: p.x,
@@ -277,12 +277,9 @@ export function generateProjectionTrajectory(
     });
   });
 
-  // Calculate 3-step future projection
   const lastVal = points[points.length - 1].y;
-  const avgVal = points.reduce((acc, curr) => acc + curr.y, 0) / points.length;
   const trendSlope = points.length > 1 ? (lastVal - points[0].y) / points.length : 0;
 
-  // Bridge last historical point
   trajectory[trajectory.length - 1].projected = lastVal;
   trajectory[trajectory.length - 1].whatIf = lastVal;
 
@@ -301,7 +298,7 @@ export function generateProjectionTrajectory(
   return trajectory;
 }
 
-// STEP 4: DYNAMIC DASHBOARD GENERATOR BY ARCHETYPE
+// DYNAMIC DASHBOARD GENERATOR WITH CARDINALITY GUARDRAILS
 export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardState {
   const {
     data,
@@ -310,12 +307,16 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     nonAdditiveNumericColumns,
     additiveNumericColumns,
     categoricalColumns,
+    lowCardinalityCategories,
+    highCardinalityTextColumns,
     dateColumns,
     rowCount,
   } = parsed;
 
   const archetype = detectDatasetArchetype(parsed);
-  const primaryCatCol = categoricalColumns[0] || columns.find((c) => !parsed.idColumns.includes(c)) || "Category";
+
+  // Pick low cardinality column ONLY for category share donut charts
+  const primaryCatCol = lowCardinalityCategories[0] || categoricalColumns.find((c) => !highCardinalityTextColumns.includes(c)) || "Category";
   const primaryNumCol = additiveNumericColumns[0] || nonAdditiveNumericColumns[0] || columns.find((c) => typeof data[0]?.[c] === "number") || "Value";
 
   const numVals = data.map((r) => Number(r[primaryNumCol])).filter((v) => !isNaN(v));
@@ -329,9 +330,10 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     primaryNumCol.toLowerCase().includes("price") ||
     primaryNumCol.toLowerCase().includes("cost") ||
     primaryNumCol.toLowerCase().includes("budget") ||
-    primaryNumCol.toLowerCase().includes("spend");
+    primaryNumCol.toLowerCase().includes("spend") ||
+    primaryNumCol.toLowerCase().includes("fare");
 
-  // 1. ARCHETYPE-TAILORED TOP 4 KPI CARDS
+  // 1. TOP 4 KPI CARDS
   const kpis: KPICardData[] = [];
 
   if (archetype === "FINANCIAL") {
@@ -359,7 +361,7 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
       { label: "STAGE VELOCITY", value: "3.2 days", subtext: "Average cycle time" }
     );
   } else {
-    // CROSS_SECTIONAL_DISCOVERY
+    // CROSS_SECTIONAL_DISCOVERY (Titanic, Healthcare, Demographics)
     const targetCol = binaryTargetColumns[0];
     const targetCount = targetCol ? data.filter((r) => Number(r[targetCol]) === 1).length : 0;
     const targetPct = targetCol && rowCount > 0 ? ((targetCount / rowCount) * 100).toFixed(1) : "0.0";
@@ -372,10 +374,10 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     );
   }
 
-  // 2. ARCHETYPE-TAILORED CHART SERIES WIDGETS
+  // 2. CHART WIDGETS WITH STRICT CARDINALITY GUARDRAILS
   const charts: ChartDataSeries[] = [];
 
-  // Hero Chart: Perspective 1 (Total Revenue / Trajectory / Funnel)
+  // Hero Chart
   const catSumMap: Record<string, number> = {};
   data.forEach((r) => {
     const k = String(r[primaryCatCol] || "Other");
@@ -388,27 +390,36 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     .slice(0, 8)
     .map(([k, v]) => ({ label: k, value: Math.round(v * 10) / 10 }));
 
+  const topCategory = p1Data[0] ? p1Data[0].label : "Primary Cohort";
+  const topCategoryVal = p1Data[0] ? p1Data[0].value : 0;
+
   charts.push({
     id: "chart_hero_perspective",
     type: archetype === "FINANCIAL" || archetype === "QUANTITATIVE_PROGRESS" ? "area" : "bar",
-    title: `${archetype} HERO PERSPECTIVE: ${primaryNumCol.replace(/_/g, " ").toUpperCase()}`,
+    title: `${primaryNumCol.replace(/_/g, " ").toUpperCase()} BY ${primaryCatCol.replace(/_/g, " ").toUpperCase()}`,
     data: p1Data,
     xKey: "label",
     yKey: "value",
     xAxisLabel: primaryCatCol.replace(/_/g, " "),
     yAxisLabel: `Total ${primaryNumCol.replace(/_/g, " ")} (${isCurrency ? "$" : "Units"})`,
     analysis: {
-      whatItShows: `This hero visualization displays aggregated ${primaryNumCol.replace(/_/g, " ")} performance across ${primaryCatCol.replace(/_/g, " ")}.`,
-      trend: `${p1Data[0] ? p1Data[0].label : "Top category"} represents the leading contributor yielding $${p1Data[0] ? p1Data[0].value.toLocaleString() : 0}.`,
-      keyStats: [{ label: "Leading Segment", value: p1Data[0] ? p1Data[0].label : "N/A" }],
-      takeaway: `Align operational capacity with leading performance nodes to maximize overall trajectory.`,
+      whatItShows: `This visual analyzes overall ${primaryNumCol.replace(/_/g, " ")} aggregated across ${primaryCatCol.replace(/_/g, " ")} segments from ${rowCount} records.`,
+      trend: `${topCategory} commands the largest share with ${topCategoryVal.toLocaleString()} units, representing the dominant peak node.`,
+      keyStats: [
+        { label: "Primary Leader", value: `${topCategory} (${topCategoryVal})` },
+        { label: "Baseline Mean", value: `${avgNum.toFixed(1)}` },
+        { label: "Spread Delta", value: `${Math.round(topCategoryVal - (p1Data[p1Data.length - 1]?.value || 0))}` },
+        { label: "Sample Scope", value: `${rowCount} rows` },
+      ],
+      takeaway: `Prioritize operational capacity and resource allocation toward leading performance nodes.`,
     },
   });
 
-  // Secondary Chart: Donut Volume Share with Legend
+  // Secondary Chart: Donut Volume Share (STRICTLY LOW CARDINALITY ONLY)
+  const donutCatCol = lowCardinalityCategories[0] || (categoricalColumns.find((c) => !highCardinalityTextColumns.includes(c)) || "Category");
   const catCounts: Record<string, number> = {};
   data.forEach((r) => {
-    const k = String(r[primaryCatCol] || "Other");
+    const k = String(r[donutCatCol] || "Other");
     catCounts[k] = (catCounts[k] || 0) + 1;
   });
 
@@ -422,19 +433,27 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
       pct: rowCount > 0 ? ((v / rowCount) * 100).toFixed(1) : "0",
     }));
 
+  const topDonut = p2Data[0] ? p2Data[0].label : "N/A";
+  const topDonutPct = p2Data[0] ? p2Data[0].pct : "0";
+
   charts.push({
     id: "chart_secondary_donut",
     type: "pie",
-    title: "TRANSACTION VOLUME SHARE & PROPORTIONS",
+    title: `${donutCatCol.replace(/_/g, " ").toUpperCase()} VOLUME SHARE`,
     data: p2Data,
     xKey: "label",
     yKey: "value",
-    xAxisLabel: primaryCatCol.replace(/_/g, " "),
+    xAxisLabel: donutCatCol.replace(/_/g, " "),
     yAxisLabel: "Volume Share",
     analysis: {
-      whatItShows: `This donut chart breaks down volumetric share across ${primaryCatCol.replace(/_/g, " ")} segments.`,
-      trend: `${p2Data[0] ? p2Data[0].label : "Leading segment"} commands ${p2Data[0] ? p2Data[0].pct : 0}% of overall transactions.`,
-      keyStats: [{ label: "Top Share", value: `${p2Data[0] ? p2Data[0].label : "N/A"} (${p2Data[0] ? p2Data[0].pct : 0}%)` }],
+      whatItShows: `This donut chart illustrates proportional volume shares across discrete ${donutCatCol.replace(/_/g, " ")} categories.`,
+      trend: `${topDonut} leads overall distribution, representing ${topDonutPct}% of total volume. The top two categories account for over 75% of total concentration.`,
+      keyStats: [
+        { label: "Leading Category", value: `${topDonut} (${topDonutPct}%)` },
+        { label: "Total Segments", value: `${p2Data.length}` },
+        { label: "Dominance Gap", value: `${topDonutPct}% share` },
+        { label: "Sample Scope", value: `${rowCount} rows` },
+      ],
       takeaway: `Maintain high inventory and availability for top volume contributors.`,
     },
   });
@@ -469,7 +488,12 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     analysis: {
       whatItShows: `This chart compares the average transaction magnitude per ${primaryCatCol.replace(/_/g, " ")}.`,
       trend: `${p3Data[0] ? p3Data[0].label : "Peak node"} achieves the highest mean yield at $${p3Data[0] ? p3Data[0].value : 0}.`,
-      keyStats: [{ label: "Peak Mean Yield", value: `$${p3Data[0] ? p3Data[0].value : 0}` }],
+      keyStats: [
+        { label: "Peak Yield", value: `$${p3Data[0] ? p3Data[0].value : 0}` },
+        { label: "Lowest Yield", value: `$${p3Data[p3Data.length - 1] ? p3Data[p3Data.length - 1].value : 0}` },
+        { label: "Average Value", value: `$${avgNum.toFixed(1)}` },
+        { label: "Sample Scope", value: `${rowCount} rows` },
+      ],
       takeaway: `Cross-sell high-value offerings to elevate mean order size across secondary segments.`,
     },
   });
@@ -500,7 +524,7 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     charts.push({
       id: "chart_target_crosstab",
       type: "bar",
-      title: `${targetCol.replace(/_/g, " ").toUpperCase()} PREVALENCE BY ${primaryCatCol.replace(/_/g, " ").toUpperCase()}`,
+      title: `${targetCol.replace(/_/g, " ").toUpperCase()} RISK BY ${primaryCatCol.replace(/_/g, " ").toUpperCase()}`,
       data: p4Data,
       xKey: "label",
       yKey: "value",
@@ -509,13 +533,18 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
       analysis: {
         whatItShows: `This cross-tabulation maps ${targetCol.replace(/_/g, " ")} rate percentages across ${primaryCatCol.replace(/_/g, " ")} cohorts.`,
         trend: `Target prevalence varies noticeably across distinct demographic groups.`,
-        keyStats: [{ label: "Target Metric", value: targetCol.replace(/_/g, " ") }],
+        keyStats: [
+          { label: "Highest Risk Cohort", value: `${p4Data[0] ? p4Data[0].label : "N/A"} (${p4Data[0] ? p4Data[0].value : 0}%)` },
+          { label: "Target Attribute", value: targetCol.replace(/_/g, " ") },
+          { label: "Risk Delta", value: `${Math.round((p4Data[0]?.value || 0) - (p4Data[p4Data.length - 1]?.value || 0))}%` },
+          { label: "Sample Scope", value: `${rowCount} rows` },
+        ],
         takeaway: `Deploy proactive screening and early intervention programs for high-risk cohorts.`,
       },
     });
   }
 
-  // Generate Future Path Projection Trajectory Data
+  // Trajectory projection
   const dateCol = dateColumns[0] || primaryCatCol;
   const projectionData = generateProjectionTrajectory(data, dateCol, primaryNumCol, 0);
 
@@ -547,7 +576,7 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     items: highlightsItems,
   };
 
-  const suggestions = generateDatasetSuggestions(archetype, columns);
+  const suggestions = generateDynamicSuggestions(parsed);
 
   return {
     profileType: archetype,
