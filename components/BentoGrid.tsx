@@ -3,33 +3,21 @@ import { DashboardState, ChartDataSeries } from "@/lib/types";
 import { MetricCard } from "./MetricCard";
 import { ChartCard } from "./ChartCard";
 import { Table } from "./ui/Table";
-import { Maximize2, Award, ChevronDown, ChevronUp, Table as TableIcon, Sparkles } from "lucide-react";
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
+import { ChevronDown, ChevronUp, Table as TableIcon, Sparkles } from "lucide-react";
 
 interface BentoGridProps {
   dashboardState: DashboardState;
   onSelectChart?: (chart: ChartDataSeries) => void;
 }
 
-const COLOR_PALETTE = ["#FE6749", "#A5329E", "#FE88ED", "#FF9E88", "#7D2277", "#D44333"];
-
 export const BentoGrid: React.FC<BentoGridProps> = ({
   dashboardState,
   onSelectChart,
 }) => {
-  const { kpis, charts, heroChart, segmentChart, correlationChart, highlightsCard, tableData, columns } = dashboardState;
+  const { kpis, charts, highlightsCard, tableData, columns } = dashboardState;
   const [tableOpen, setTableOpen] = useState(false);
 
-  // Fallback chart assignments
-  const hero = heroChart || (charts && charts[0]) || null;
-  const segment = segmentChart || (charts && charts[1]) || null;
-  const correlation = correlationChart || (charts && charts[2]) || null;
-
-  // Donut data for Segment Card
-  const donutData = segment?.data || [];
-  const totalDonutVal = donutData.reduce((acc, curr) => acc + (Number(curr.value) || 0), 0);
-
-  // Highlights Card items
+  // Highlights Card items fallback
   const highlightItems = highlightsCard?.items || [
     { label: "Data Quality Ratio", value: "100.0%", subtext: "0 schema anomalies" },
     { label: "Total Columns", value: `${columns.length} attrs`, subtext: "Successfully parsed" },
@@ -37,133 +25,50 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
 
   return (
     <div className="w-full space-y-4">
-      {/* 1. TOP KPI ROW (4 Columns) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.slice(0, 4).map((kpi, idx) => (
+      {/* 1. TOP EXECUTIVE KPI ROW (Dynamic Grid 4 to 6 Cards) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+        {kpis.map((kpi, idx) => (
           <MetricCard key={idx} data={kpi} />
         ))}
       </div>
 
-      {/* 2. MAIN ASYMMETRICAL BENTO GRID (12-Column Grid Layout) */}
+      {/* 2. AUTONOMOUS DYNAMIC BENTO GRID (12-Column Responsive Layout for 6-12 Widgets) */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-        {/* HERO CARD (Span 8 / 12 Columns): Primary Distribution or Key Target Cross-Tabulation */}
-        <div className="md:col-span-8">
-          <ChartCard
-            series={hero}
-            defaultType={hero?.type || "bar"}
-            accentColor="#FE6749"
-            secondaryColor="#A5329E"
-            className="h-full min-h-[360px]"
-            onClick={() => hero && onSelectChart && onSelectChart(hero)}
-          />
-        </div>
+        {charts.map((chartWidget, idx) => {
+          // Dynamic Column Span Mapping
+          let colSpanClass = "md:col-span-6";
 
-        {/* SEGMENT DONUT CARD (Span 4 / 12 Columns): Category Distribution Donut with Percentage Share */}
-        <div
-          onClick={() => segment && onSelectChart && onSelectChart(segment)}
-          className="md:col-span-4 rounded-3xl bg-[#18191b] border border-white/10 p-5 flex flex-col justify-between shadow-xl relative overflow-hidden cursor-pointer hover:border-[#FE6749]/50 transition-all duration-200 group"
-        >
-          {/* Hover Enlarge Badge */}
-          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-            <span className="rounded-full px-2.5 py-1 text-[10px] font-mono bg-[#FE6749] text-white shadow-md flex items-center gap-1">
-              <Maximize2 className="w-3 h-3" />
-              <span>[Click to Expand]</span>
-            </span>
-          </div>
+          if (chartWidget.type === "area" || idx === 0) {
+            colSpanClass = "md:col-span-8";
+          } else if (chartWidget.type === "pie") {
+            colSpanClass = "md:col-span-4";
+          } else if (chartWidget.type === "heatmap" || chartWidget.type === "sankey" || chartWidget.type === "boxplot") {
+            colSpanClass = "md:col-span-6";
+          } else if (idx % 5 === 0) {
+            colSpanClass = "md:col-span-8";
+          }
 
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h3 className="text-sm font-semibold text-white tracking-tight uppercase font-mono">
-                {segment?.title || "Category Distribution"}
-              </h3>
-              <p className="text-[11px] text-white/50 tracking-wider font-mono">
-                [Population Share Breakdown]
-              </p>
+          return (
+            <div key={chartWidget.id || `widget_${idx}`} className={colSpanClass}>
+              <ChartCard
+                series={chartWidget}
+                defaultType={chartWidget.type || "bar"}
+                accentColor={idx % 2 === 0 ? "#FE6749" : "#A5329E"}
+                secondaryColor={idx % 2 === 0 ? "#A5329E" : "#FE6749"}
+                className="h-full min-h-[340px]"
+                onClick={() => onSelectChart && onSelectChart(chartWidget)}
+              />
             </div>
-          </div>
+          );
+        })}
 
-          {/* Donut Graph */}
-          <div className="w-full h-[180px] relative my-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#212222",
-                    borderColor: "rgba(255, 255, 255, 0.15)",
-                    borderRadius: "12px",
-                    color: "#ffffff",
-                    fontSize: "12px",
-                  }}
-                />
-                <Pie
-                  data={donutData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={75}
-                  paddingAngle={4}
-                >
-                  {donutData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLOR_PALETTE[index % COLOR_PALETTE.length]}
-                      stroke="#18191b"
-                      strokeWidth={2}
-                    />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Category Percentage Breakdown List */}
-          <div className="space-y-1.5 border-t border-white/5 pt-2.5">
-            {donutData.slice(0, 3).map((item, idx) => {
-              const val = Number(item.value) || 0;
-              const pct = item.pct ? item.pct : totalDonutVal > 0 ? Math.round((val / totalDonutVal) * 100) : 0;
-              const barColor = COLOR_PALETTE[idx % COLOR_PALETTE.length];
-
-              return (
-                <div key={idx} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-white/80 truncate max-w-[130px]">
-                      {item.name || item[segment?.xKey || "name"]}
-                    </span>
-                    <span className="text-white/50 font-semibold">{pct}%</span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-300"
-                      style={{ width: `${pct}%`, backgroundColor: barColor }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* CORRELATION CARD (Span 6 / 12 Columns): Secondary Multi-Metric Relationship / Risk Rates */}
-        <div className="md:col-span-6">
-          <ChartCard
-            series={correlation}
-            defaultType={correlation?.type || "bar"}
-            accentColor="#A5329E"
-            secondaryColor="#FE6749"
-            className="h-full min-h-[320px]"
-            onClick={() => correlation && onSelectChart && onSelectChart(correlation)}
-          />
-        </div>
-
-        {/* HIGHLIGHTS SUMMARY CARD (Span 6 / 12 Columns): Extreme Percentiles & Cohort Summary */}
+        {/* HIGHLIGHTS SUMMARY CARD (Span 6 / 12 Columns) */}
         <div className="md:col-span-6 rounded-3xl bg-[#18191b] border border-white/10 p-5 flex flex-col justify-between shadow-xl relative overflow-hidden">
           <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2.5">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#FE6749]" />
               <h3 className="text-sm font-semibold text-white tracking-tight uppercase font-mono">
-                {highlightsCard?.title || "Top Highlights & Cohort Summary"}
+                {highlightsCard?.title || "[Top Highlights & Cohort Summary]"}
               </h3>
             </div>
             <span className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/60">

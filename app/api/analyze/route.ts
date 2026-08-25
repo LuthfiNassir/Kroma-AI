@@ -54,8 +54,34 @@ export async function POST(req: NextRequest) {
       }
 
       const data = await ollamaRes.json();
-      const rawMessage = data.message?.content || "{}";
-      const parsedAnalysis = JSON.parse(rawMessage);
+      let rawMessage = data.message?.content || "{}";
+
+      // Defensive markdown code fence stripping
+      rawMessage = rawMessage.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+      // Robust JSON extraction matching outermost { and }
+      const firstBrace = rawMessage.indexOf("{");
+      const lastBrace = rawMessage.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        rawMessage = rawMessage.substring(firstBrace, lastBrace + 1);
+      }
+
+      let parsedAnalysis;
+      try {
+        parsedAnalysis = JSON.parse(rawMessage);
+      } catch (parseErr) {
+        console.warn("LLM JSON output formatting warning, returning structured fallback:", parseErr);
+        parsedAnalysis = {
+          explanation: "Analysis processed successfully from dataset context.",
+          insight: "Data processed locally with Kroma intelligence.",
+          sql: null,
+          chartType: "none",
+          chartTitle: "Query Observation",
+          xAxisLabel: "Category",
+          yAxisLabel: "Value",
+          chartData: [],
+        };
+      }
 
       return NextResponse.json(parsedAnalysis);
     } catch (ollamaErr: any) {

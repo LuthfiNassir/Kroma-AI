@@ -36,7 +36,7 @@ const COLOR_PALETTE = ["#FE6749", "#A5329E", "#FE88ED", "#FF9E88", "#7D2277", "#
 
 // Custom SVG Renderer for Boxplot
 const CustomBoxPlotRenderer: React.FC<{ data: any[]; accentColor: string }> = ({ data, accentColor }) => {
-  if (!data || data.length === 0) return null;
+  if (!data || !Array.isArray(data) || data.length === 0) return null;
 
   return (
     <div className="w-full h-full flex flex-col justify-around py-2 px-4 space-y-2 overflow-y-auto font-mono">
@@ -93,9 +93,8 @@ const CustomBoxPlotRenderer: React.FC<{ data: any[]; accentColor: string }> = ({
 
 // Custom SVG Renderer for Heatmap Matrix
 const CustomHeatmapRenderer: React.FC<{ data: any[]; accentColor: string }> = ({ data, accentColor }) => {
-  if (!data || data.length === 0) return null;
+  if (!data || !Array.isArray(data) || data.length === 0) return null;
 
-  // Extract unique X and Y categories
   const xLabels = Array.from(new Set(data.map((d) => String(d.x || d.label || "X"))));
   const yLabels = Array.from(new Set(data.map((d) => String(d.y || d.category || "Y"))));
 
@@ -109,16 +108,13 @@ const CustomHeatmapRenderer: React.FC<{ data: any[]; accentColor: string }> = ({
           gridTemplateColumns: `auto repeat(${xLabels.length}, minmax(0, 1fr))`,
         }}
       >
-        {/* Top-left empty corner */}
         <div className="h-6" />
-        {/* X Header */}
         {xLabels.map((x, idx) => (
           <div key={idx} className="h-6 flex items-center justify-center text-white/50 font-semibold truncate px-1">
             {x}
           </div>
         ))}
 
-        {/* Matrix Rows */}
         {yLabels.map((y, yIdx) => (
           <React.Fragment key={yIdx}>
             <div className="flex items-center text-white/60 font-semibold truncate pr-2 text-right">
@@ -127,7 +123,7 @@ const CustomHeatmapRenderer: React.FC<{ data: any[]; accentColor: string }> = ({
             {xLabels.map((x, xIdx) => {
               const match = data.find((d) => String(d.x || d.label) === x && String(d.y || d.category) === y);
               const val = match ? Number(match.value) || 0 : 0;
-              const opacity = Math.max(val / maxVal, 0.1);
+              const opacity = Math.max(val / maxVal, 0.15);
 
               return (
                 <div
@@ -152,7 +148,7 @@ const CustomHeatmapRenderer: React.FC<{ data: any[]; accentColor: string }> = ({
 
 // Custom SVG Renderer for Sankey Flow Diagram
 const CustomSankeyRenderer: React.FC<{ data: any[] }> = ({ data }) => {
-  if (!data || data.length === 0) return null;
+  if (!data || !Array.isArray(data) || data.length === 0) return null;
 
   const sources = Array.from(new Set(data.map((d) => String(d.source || "Source"))));
   const targets = Array.from(new Set(data.map((d) => String(d.target || "Target"))));
@@ -214,15 +210,15 @@ export const ChartCard: React.FC<ChartCardProps> = ({
   className,
   onClick,
 }) => {
-  if (!series || !series.data || series.data.length === 0) {
+  if (!series || !series.data || !Array.isArray(series.data) || series.data.length === 0) {
     return (
       <div
         className={cn(
-          "rounded-3xl bg-[#18191b] border border-white/10 p-6 min-h-[320px] flex flex-col items-center justify-center text-center text-white/40",
+          "rounded-3xl bg-[#18191b] border border-white/10 p-6 min-h-[320px] flex items-center justify-center text-center text-white/40 font-mono text-xs",
           className
         )}
       >
-        <span className="text-xs font-mono">[No visualization data available]</span>
+        <span>[Insufficient data for visualization]</span>
       </div>
     );
   }

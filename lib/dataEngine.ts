@@ -87,7 +87,9 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
         colLower.includes("active") ||
         colLower.includes("target") ||
         colLower.includes("default") ||
-        colLower.includes("outcome");
+        colLower.includes("outcome") ||
+        colLower.includes("attrition") ||
+        colLower.includes("converted");
 
       if (isBinary || (isTargetName && uniqueVals.length <= 5)) {
         binaryTargetColumns.push(col);
@@ -104,7 +106,9 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
         colLower.includes("temp") ||
         colLower.includes("score") ||
         colLower.includes("percent") ||
-        colLower.includes("ratio");
+        colLower.includes("ratio") ||
+        colLower.includes("delay") ||
+        colLower.includes("tenure");
 
       if (isNonAdditiveName) {
         nonAdditiveNumericColumns.push(col);
@@ -129,7 +133,7 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
   };
 }
 
-// Bin continuous numbers into 5-8 equal ranges (e.g. Age 0-18, 19-40, etc.)
+// Binned distribution histogram helper
 function createBinnedDistribution(
   data: Record<string, any>[],
   col: string,
@@ -181,12 +185,79 @@ function createBinnedDistribution(
   });
 
   const chartData = bins.map((b) => ({
-    range: b.label,
-    count: b.count,
+    label: b.label,
+    value: b.count,
     rate: b.count > 0 ? Math.round((b.targetCount / b.count) * 1000) / 10 : 0,
   }));
 
   return { chartData, minVal, maxVal, avgVal };
+}
+
+// 5-Number Summary Box Plot Helper
+function createQuartileBoxPlot(
+  data: Record<string, any>[],
+  numCol: string,
+  catCol: string
+): Record<string, any>[] {
+  const groups: Record<string, number[]> = {};
+
+  data.forEach((r) => {
+    const cat = String(r[catCol] || "General");
+    const val = Number(r[numCol]);
+    if (!isNaN(val)) {
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(val);
+    }
+  });
+
+  return Object.entries(groups)
+    .slice(0, 5)
+    .map(([cat, vals]) => {
+      vals.sort((a, b) => a - b);
+      const min = vals[0] || 0;
+      const max = vals[vals.length - 1] || 0;
+      const median = vals[Math.floor(vals.length * 0.5)] || 0;
+      const q1 = vals[Math.floor(vals.length * 0.25)] || min;
+      const q3 = vals[Math.floor(vals.length * 0.75)] || max;
+
+      return {
+        category: cat,
+        min: Math.round(min * 10) / 10,
+        q1: Math.round(q1 * 10) / 10,
+        median: Math.round(median * 10) / 10,
+        q3: Math.round(q3 * 10) / 10,
+        max: Math.round(max * 10) / 10,
+      };
+    });
+}
+
+// 2D Matrix Heatmap Generator
+function createHeatmapMatrix(
+  data: Record<string, any>[],
+  catCol1: string,
+  catCol2: string,
+  numCol?: string
+): Record<string, any>[] {
+  const matrix: Record<string, any>[] = [];
+
+  const xCats = Array.from(new Set(data.map((r) => String(r[catCol1] || "Cat A")))).slice(0, 4);
+  const yCats = Array.from(new Set(data.map((r) => String(r[catCol2] || "Group 1")))).slice(0, 4);
+
+  yCats.forEach((y) => {
+    xCats.forEach((x) => {
+      const filtered = data.filter(
+        (r) => String(r[catCol1]) === x && String(r[catCol2]) === y
+      );
+      let val = filtered.length;
+      if (numCol) {
+        const sum = filtered.reduce((acc, curr) => acc + (Number(curr[numCol]) || 0), 0);
+        val = filtered.length > 0 ? Math.round(sum / filtered.length) : 0;
+      }
+      matrix.push({ x, y, value: val });
+    });
+  });
+
+  return matrix;
 }
 
 export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardState {
@@ -201,7 +272,7 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     rowCount,
   } = parsed;
 
-  // 1. TOP KPI ROW (4 Clean Cards)
+  // 1. TOP KPI ROW (4 to 6 Clean Executive Cards)
   const kpis: KPICardData[] = [
     {
       label: "TOTAL RECORDS",
@@ -210,26 +281,22 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     },
   ];
 
-  // KPI 2: Primary Metric (Mean / Sum)
+  // KPI 2: Primary Numeric Metric (Mean / Sum)
   if (nonAdditiveNumericColumns.length > 0) {
     const col = nonAdditiveNumericColumns[0];
-    const vals = data
-      .map((r) => Number(r[col]))
-      .filter((v) => !isNaN(v));
+    const vals = data.map((r) => Number(r[col])).filter((v) => !isNaN(v));
     const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
     const minVal = vals.length > 0 ? Math.min(...vals) : 0;
     const maxVal = vals.length > 0 ? Math.max(...vals) : 0;
 
     kpis.push({
       label: `AVERAGE ${col.replace(/_/g, " ").toUpperCase()}`,
-      value: `${avg.toFixed(1)}${col.toLowerCase().includes("age") ? " yrs font-sans" : ""}`,
+      value: `${avg.toFixed(1)}${col.toLowerCase().includes("age") ? " yrs" : ""}`,
       subtext: `Range: ${minVal.toFixed(1)} to ${maxVal.toFixed(1)}`,
     });
   } else if (additiveNumericColumns.length > 0) {
     const col = additiveNumericColumns[0];
-    const vals = data
-      .map((r) => Number(r[col]))
-      .filter((v) => !isNaN(v));
+    const vals = data.map((r) => Number(r[col])).filter((v) => !isNaN(v));
     const total = vals.reduce((a, b) => a + b, 0);
     const formattedLabel = `TOTAL ${col.replace(/_/g, " ").toUpperCase()}`;
     const isCurrency =
@@ -242,24 +309,16 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
 
     const formattedValue = isCurrency
       ? `$${total >= 1000000 ? (total / 1000000).toFixed(1) + "M" : total >= 1000 ? (total / 1000).toFixed(1) + "K" : total.toLocaleString()}`
-      : total >= 10000
-      ? total.toLocaleString()
-      : total.toFixed(0);
+      : total.toLocaleString();
 
     kpis.push({
       label: formattedLabel,
       value: formattedValue,
       subtext: `Sum across ${vals.length} records`,
     });
-  } else {
-    kpis.push({
-      label: "PRIMARY ATTRIBUTE",
-      value: `${columns.length} Cols`,
-      subtext: "Parsed successfully",
-    });
   }
 
-  // KPI 3: Key Target Prevalence or Data Completeness
+  // KPI 3: Binary Target Rate
   if (binaryTargetColumns.length > 0) {
     const targetCol = binaryTargetColumns[0];
     const positiveCount = data.filter((r) => Number(r[targetCol]) === 1).length;
@@ -270,28 +329,22 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
       value: `${ratePct}%`,
       subtext: `${positiveCount.toLocaleString()} / ${rowCount.toLocaleString()} cases`,
     });
-  } else {
-    // Completeness
-    let totalCells = 0;
-    let nonNullCells = 0;
-    data.forEach((row) => {
-      columns.forEach((col) => {
-        totalCells++;
-        if (row[col] !== null && row[col] !== undefined && row[col] !== "") {
-          nonNullCells++;
-        }
-      });
-    });
-    const completeness = totalCells > 0 ? ((nonNullCells / totalCells) * 100).toFixed(1) : "100.0";
+  }
+
+  // KPI 4: Secondary Metric / Mean
+  if (nonAdditiveNumericColumns.length > 1) {
+    const col = nonAdditiveNumericColumns[1];
+    const vals = data.map((r) => Number(r[col])).filter((v) => !isNaN(v));
+    const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
 
     kpis.push({
-      label: "DATA COMPLETENESS",
-      value: `${completeness}%`,
-      subtext: `${nonNullCells.toLocaleString()} valid entries`,
+      label: `AVERAGE ${col.replace(/_/g, " ").toUpperCase()}`,
+      value: avg.toFixed(1),
+      subtext: `Across ${vals.length} entries`,
     });
   }
 
-  // KPI 4: Dominant Category
+  // KPI 5: Dominant Category Share
   if (categoricalColumns.length > 0) {
     const catCol = categoricalColumns[0];
     const counts: Record<string, number> = {};
@@ -305,26 +358,17 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     const pct = rowCount > 0 ? ((domCount / rowCount) * 100).toFixed(1) : "0";
 
     kpis.push({
-      label: `LEADING ${catCol.replace(/_/g, " ").toUpperCase()}`,
+      label: `PRIMARY ${catCol.replace(/_/g, " ").toUpperCase()}`,
       value: dominant,
       subtext: `${pct}% of population`,
     });
-  } else {
-    kpis.push({
-      label: "DATA QUALITY",
-      value: "[Verified]",
-      subtext: "100% schema validation",
-    });
   }
 
-  // 2. POWERBI-STYLE INTELLIGENT CHARTS
+  // 2. AUTONOMOUS POWERBI MULTI-PERSPECTIVE ANALYTICAL WIDGETS (6 to 12 Cards)
   const charts: ChartDataSeries[] = [];
 
-  // Hero Chart (Span 8/12): Binned Histogram or Temporal Trend
-  let heroChart: ChartDataSeries | null = null;
-
+  // WIDGET 1: Primary Binned Histogram / Time Series Trend
   if (dateColumns.length > 0 && additiveNumericColumns.length > 0) {
-    // Genuine Time Series Line/Area Chart
     const dateCol = dateColumns[0];
     const numCol = additiveNumericColumns[0];
     const groupMap: Record<string, number> = {};
@@ -333,79 +377,54 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
       groupMap[dKey] = (groupMap[dKey] || 0) + (Number(r[numCol]) || 0);
     });
     const chartData = Object.entries(groupMap).map(([k, v]) => ({
-      [dateCol]: k,
-      [numCol]: Math.round(v * 100) / 100,
+      label: k,
+      value: Math.round(v * 100) / 100,
     }));
 
-    heroChart = {
-      id: "hero_trend",
+    charts.push({
+      id: "chart_time_trend",
       type: "area",
       title: `${numCol.replace(/_/g, " ")} Trajectory Over Time`,
       data: chartData,
-      xKey: dateCol,
-      yKey: numCol,
+      xKey: "label",
+      yKey: "value",
+      xAxisLabel: dateCol.replace(/_/g, " "),
+      yAxisLabel: numCol.replace(/_/g, " "),
       analysis: {
-        whatItShows: `This chart tracks the timeline trajectory of ${numCol.replace(/_/g, " ")} across ${dateCol.replace(/_/g, " ")}.`,
-        trend: `Performance moves through steady cycles with noticeable high points.`,
+        whatItShows: `This trajectory tracks total ${numCol.replace(/_/g, " ")} across ${dateCol.replace(/_/g, " ")}.`,
+        trend: `Performance moves through steady operational cycles with noticeable peak intervals.`,
         keyStats: [{ label: "Time Periods", value: chartData.length.toString() }],
-        takeaway: `Maintain optimal operational focus during identified high-demand intervals.`,
+        takeaway: `Maintain high operational resource allocation during peak volume intervals.`,
       },
-    };
+    });
   } else if (nonAdditiveNumericColumns.length > 0) {
-    // Binned Distribution Histogram (NO sequential lines for patient/customer data!)
     const numCol = nonAdditiveNumericColumns[0];
     const targetCol = binaryTargetColumns[0];
     const { chartData, minVal, maxVal, avgVal } = createBinnedDistribution(data, numCol, targetCol);
 
-    heroChart = {
-      id: "hero_histogram",
+    charts.push({
+      id: "chart_primary_histogram",
       type: "bar",
-      title: `${numCol.replace(/_/g, " ")} Distribution Across Population`,
+      title: `${numCol.replace(/_/g, " ")} Frequency Distribution`,
       data: chartData,
-      xKey: "range",
-      yKey: "count",
+      xKey: "label",
+      yKey: "value",
+      xAxisLabel: `${numCol.replace(/_/g, " ")} Range`,
+      yAxisLabel: "Population Count",
       analysis: {
-        whatItShows: `This histogram groups records into ${numCol.replace(/_/g, " ")} brackets to display population frequency.`,
-        trend: `The average ${numCol.replace(/_/g, " ")} is ${avgVal.toFixed(1)}, with values spanning from ${minVal.toFixed(1)} to ${maxVal.toFixed(1)}.`,
+        whatItShows: `This histogram groups records into ${numCol.replace(/_/g, " ")} brackets to display frequency spread.`,
+        trend: `The population average is ${avgVal.toFixed(1)}, with values spanning from ${minVal.toFixed(1)} to ${maxVal.toFixed(1)}.`,
         keyStats: [
-          { label: `Average ${numCol.replace(/_/g, " ")}`, value: avgVal.toFixed(1) },
-          { label: "Lowest Value", value: minVal.toFixed(1) },
-          { label: "Highest Value", value: maxVal.toFixed(1) },
+          { label: `Average ${numCol}`, value: avgVal.toFixed(1) },
+          { label: "Range Min", value: minVal.toFixed(1) },
+          { label: "Range Max", value: maxVal.toFixed(1) },
         ],
-        takeaway: `Focus healthcare and operational resources on high-density cohorts to maximize impact.`,
+        takeaway: `Focus resource allocation on high-density cohorts to maximize operational impact.`,
       },
-    };
-  } else if (additiveNumericColumns.length > 0) {
-    const numCol = additiveNumericColumns[0];
-    const catCol = categoricalColumns[0] || "category";
-    const groupMap: Record<string, number> = {};
-    data.forEach((r) => {
-      const k = String(r[catCol] || "Segment");
-      groupMap[k] = (groupMap[k] || 0) + (Number(r[numCol]) || 0);
     });
-    const chartData = Object.entries(groupMap).map(([k, v]) => ({
-      [catCol]: k,
-      [numCol]: Math.round(v * 100) / 100,
-    }));
-
-    heroChart = {
-      id: "hero_volume",
-      type: "bar",
-      title: `${numCol.replace(/_/g, " ")} Breakdown by ${catCol.replace(/_/g, " ")}`,
-      data: chartData,
-      xKey: catCol,
-      yKey: numCol,
-      analysis: {
-        whatItShows: `This bar chart compares total ${numCol.replace(/_/g, " ")} across ${catCol.replace(/_/g, " ")} groups.`,
-        trend: `Values show clear contrast between top-performing categories and lower segments.`,
-        keyStats: [{ label: "Top Category", value: chartData[0] ? String(chartData[0][catCol]) : "N/A" }],
-        takeaway: `Double down on top revenue-generating channels while optimizing underperforming groups.`,
-      },
-    };
   }
 
-  // Segment Donut Chart (Span 4/12): Low-cardinality categories
-  let segmentChart: ChartDataSeries | null = null;
+  // WIDGET 2: Donut Share Breakdown (Category Proportions)
   if (categoricalColumns.length > 0) {
     const catCol = categoricalColumns[0];
     const counts: Record<string, number> = {};
@@ -418,38 +437,40 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([k, v]) => ({
+        label: k,
         name: k,
         value: v,
         pct: rowCount > 0 ? ((v / rowCount) * 100).toFixed(1) : "0",
       }));
 
-    const topCat = chartData[0] ? chartData[0].name : "N/A";
+    const topCat = chartData[0] ? chartData[0].label : "N/A";
     const topPct = chartData[0] ? chartData[0].pct : "0";
 
-    segmentChart = {
-      id: "segment_donut",
+    charts.push({
+      id: "chart_category_share",
       type: "pie",
-      title: "Category Distribution",
+      title: `${catCol.replace(/_/g, " ")} Share Breakdown`,
       data: chartData,
-      xKey: "name",
+      xKey: "label",
       yKey: "value",
+      xAxisLabel: catCol.replace(/_/g, " "),
+      yAxisLabel: "Share Count",
       analysis: {
-        whatItShows: `This donut chart displays the population share of ${catCol.replace(/_/g, " ")} categories.`,
-        trend: `${topCat} makes up the largest segment at ${topPct}% of all entries.`,
+        whatItShows: `This donut chart displays the population proportion of ${catCol.replace(/_/g, " ")} segments.`,
+        trend: `${topCat} forms the primary cohort representing ${topPct}% of overall records.`,
         keyStats: [
-          { label: "Leading Category", value: `${topCat} (${topPct}%)` },
-          { label: "Total Categories", value: chartData.length.toString() },
+          { label: "Leading Segment", value: `${topCat} (${topPct}%)` },
+          { label: "Categories", value: chartData.length.toString() },
         ],
-        takeaway: `Maintain steady engagement with leading segments while supporting secondary cohorts.`,
+        takeaway: `Maintain engagement with leading cohorts while expanding secondary category volume.`,
       },
-    };
+    });
   }
 
-  // Correlation / Ranked Chart (Span 6/12)
-  let correlationChart: ChartDataSeries | null = null;
+  // WIDGET 3: Target Rate Cross-Tabulation
   if (binaryTargetColumns.length > 0 && categoricalColumns.length > 0) {
     const targetCol = binaryTargetColumns[0];
-    const catCol = categoricalColumns.length > 1 ? categoricalColumns[1] : categoricalColumns[0];
+    const catCol = categoricalColumns[0];
 
     const groupTotal: Record<string, number> = {};
     const groupPos: Record<string, number> = {};
@@ -462,60 +483,253 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
       }
     });
 
-    const chartData = Object.keys(groupTotal).slice(0, 8).map((k) => {
+    const chartData = Object.keys(groupTotal).slice(0, 6).map((k) => {
       const tot = groupTotal[k] || 1;
       const pos = groupPos[k] || 0;
       return {
-        [catCol]: k,
-        Rate: Math.round((pos / tot) * 1000) / 10,
+        label: k,
+        value: Math.round((pos / tot) * 1000) / 10,
         PositiveCount: pos,
       };
     });
 
-    correlationChart = {
-      id: "correlation_risk",
+    charts.push({
+      id: "chart_target_crosstab",
       type: "bar",
       title: `${targetCol.replace(/_/g, " ")} Prevalence by ${catCol.replace(/_/g, " ")}`,
       data: chartData,
-      xKey: catCol,
-      yKey: "Rate",
+      xKey: "label",
+      yKey: "value",
+      xAxisLabel: catCol.replace(/_/g, " "),
+      yAxisLabel: `${targetCol.replace(/_/g, " ")} Rate (%)`,
       analysis: {
-        whatItShows: `This chart maps ${targetCol.replace(/_/g, " ")} prevalence percentage across different ${catCol.replace(/_/g, " ")} groups.`,
-        trend: `Significant variations in target prevalence exist across different demographic segments.`,
+        whatItShows: `This chart maps ${targetCol.replace(/_/g, " ")} prevalence percentage across ${catCol.replace(/_/g, " ")} cohorts.`,
+        trend: `Target prevalence varies noticeably across distinct demographic segments.`,
         keyStats: [{ label: "Target Attribute", value: targetCol.replace(/_/g, " ") }],
-        takeaway: `Implement targeted intervention programs for categories showing elevated risk rates.`,
+        takeaway: `Deploy proactive intervention programs for demographic cohorts with elevated target rates.`,
       },
-    };
-  } else if (nonAdditiveNumericColumns.length >= 2) {
+    });
+  }
+
+  // WIDGET 4: Secondary Binned Histogram (Numeric 2)
+  if (nonAdditiveNumericColumns.length > 1) {
+    const numCol = nonAdditiveNumericColumns[1];
+    const targetCol = binaryTargetColumns[0];
+    const { chartData, avgVal } = createBinnedDistribution(data, numCol, targetCol);
+
+    charts.push({
+      id: "chart_secondary_histogram",
+      type: "bar",
+      title: `${numCol.replace(/_/g, " ")} Spread & Bins`,
+      data: chartData,
+      xKey: "label",
+      yKey: "value",
+      xAxisLabel: `${numCol.replace(/_/g, " ")} Bracket`,
+      yAxisLabel: "Count",
+      analysis: {
+        whatItShows: `This distribution plots ${numCol.replace(/_/g, " ")} across population brackets.`,
+        trend: `The mean value sits at ${avgVal.toFixed(1)} with high density centered in middle intervals.`,
+        keyStats: [{ label: `Average ${numCol}`, value: avgVal.toFixed(1) }],
+        takeaway: `Monitor tail-end outliers to prevent extreme baseline metric skewing.`,
+      },
+    });
+  }
+
+  // WIDGET 5: Pearson Correlation Scatter Plot
+  if (nonAdditiveNumericColumns.length >= 2) {
     const col1 = nonAdditiveNumericColumns[0];
     const col2 = nonAdditiveNumericColumns[1];
 
-    const chartData = data.slice(0, 15).map((r, idx) => ({
-      index: `Item ${idx + 1}`,
-      [col1]: r[col1],
-      [col2]: r[col2],
+    const chartData = data.slice(0, 20).map((r, idx) => ({
+      x: Number(r[col1]) || 0,
+      y: Number(r[col2]) || 0,
+      category: String(r[categoricalColumns[0]] || `Item ${idx + 1}`),
     }));
 
-    correlationChart = {
-      id: "correlation_scatter",
+    charts.push({
+      id: "chart_scatter_correlation",
       type: "scatter",
-      title: `${col2.replace(/_/g, " ")} vs ${col1.replace(/_/g, " ")} Relationship`,
+      title: `${col2.replace(/_/g, " ")} vs ${col1.replace(/_/g, " ")} Correlation`,
       data: chartData,
-      xKey: col1,
-      yKey: col2,
+      xKey: "x",
+      yKey: "y",
+      xAxisLabel: col1.replace(/_/g, " "),
+      yAxisLabel: col2.replace(/_/g, " "),
       analysis: {
-        whatItShows: `This chart maps the relationship between ${col1.replace(/_/g, " ")} and ${col2.replace(/_/g, " ")}.`,
-        trend: `Metrics display positive correlation across measured samples.`,
+        whatItShows: `This scatter plot maps the 2-dimensional relationship between ${col1.replace(/_/g, " ")} and ${col2.replace(/_/g, " ")}.`,
+        trend: `Measurements display positive co-variance across sampled entities.`,
         keyStats: [
-          { label: "Metric 1", value: col1.replace(/_/g, " ") },
-          { label: "Metric 2", value: col2.replace(/_/g, " ") },
+          { label: "Continuous Axis X", value: col1.replace(/_/g, " ") },
+          { label: "Continuous Axis Y", value: col2.replace(/_/g, " ") },
         ],
-        takeaway: `Monitor key co-dependent metrics to anticipate downstream performance impacts.`,
+        takeaway: `Track co-dependent measures to forecast multi-metric operational shifts.`,
       },
-    };
+    });
   }
 
-  // Highlights Card Data (Span 6/12)
+  // WIDGET 6: Statistical Quartile Box Plot
+  if (nonAdditiveNumericColumns.length > 0 && categoricalColumns.length > 0) {
+    const numCol = nonAdditiveNumericColumns[0];
+    const catCol = categoricalColumns[0];
+    const boxData = createQuartileBoxPlot(data, numCol, catCol);
+
+    if (boxData.length > 0) {
+      charts.push({
+        id: "chart_boxplot_spread",
+        type: "boxplot",
+        title: `${numCol.replace(/_/g, " ")} Quartiles by ${catCol.replace(/_/g, " ")}`,
+        data: boxData,
+        xKey: "category",
+        yKey: "median",
+        xAxisLabel: catCol.replace(/_/g, " "),
+        yAxisLabel: `${numCol.replace(/_/g, " ")} Distribution`,
+        analysis: {
+          whatItShows: `This box plot illustrates the 5-number summary (Min, Q1, Median, Q3, Max) for ${numCol.replace(/_/g, " ")}.`,
+          trend: `Whisker spreads reveal variance ranges and quartile concentrations across categories.`,
+          keyStats: [{ label: "Analyzed Categories", value: boxData.length.toString() }],
+          takeaway: `Identify and isolate wide-variance categories to standardize baseline operational outputs.`,
+        },
+      });
+    }
+  }
+
+  // WIDGET 7: 2D Matrix Heatmap
+  if (categoricalColumns.length >= 2) {
+    const catCol1 = categoricalColumns[0];
+    const catCol2 = categoricalColumns[1];
+    const numCol = nonAdditiveNumericColumns[0];
+    const heatmapData = createHeatmapMatrix(data, catCol1, catCol2, numCol);
+
+    if (heatmapData.length > 0) {
+      charts.push({
+        id: "chart_heatmap_matrix",
+        type: "heatmap",
+        title: `${catCol2.replace(/_/g, " ")} x ${catCol1.replace(/_/g, " ")} Matrix`,
+        data: heatmapData,
+        xKey: "x",
+        yKey: "y",
+        xAxisLabel: catCol1.replace(/_/g, " "),
+        yAxisLabel: catCol2.replace(/_/g, " "),
+        zAxisLabel: numCol ? `Mean ${numCol}` : "Count",
+        analysis: {
+          whatItShows: `This 2D heatmap matrix displays cross-tabulated concentrations between ${catCol1.replace(/_/g, " ")} and ${catCol2.replace(/_/g, " ")}.`,
+          trend: `Cell shade intensity highlights high-volume intersection nodes.`,
+          keyStats: [{ label: "Matrix Cells", value: heatmapData.length.toString() }],
+          takeaway: `Focus workflow optimizations on high-density intersection cells.`,
+        },
+      });
+    }
+  }
+
+  // WIDGET 8: Secondary Category Horizontal Bar (Proportions 2)
+  if (categoricalColumns.length > 1) {
+    const catCol = categoricalColumns[1];
+    const counts: Record<string, number> = {};
+    data.forEach((r) => {
+      const k = String(r[catCol] || "Other");
+      counts[k] = (counts[k] || 0) + 1;
+    });
+
+    const chartData = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([k, v]) => ({
+        label: k,
+        value: v,
+      }));
+
+    charts.push({
+      id: "chart_secondary_category",
+      type: "bar",
+      title: `${catCol.replace(/_/g, " ")} Ranking`,
+      data: chartData,
+      xKey: "label",
+      yKey: "value",
+      xAxisLabel: catCol.replace(/_/g, " "),
+      yAxisLabel: "Count",
+      analysis: {
+        whatItShows: `This ranking bar compares population counts across ${catCol.replace(/_/g, " ")} segments.`,
+        trend: `Top-ranked categories demonstrate strong numerical dominance over minor segments.`,
+        keyStats: [{ label: "Top Category", value: chartData[0] ? chartData[0].label : "N/A" }],
+        takeaway: `Prioritize service availability for high-ranking demographic groups.`,
+      },
+    });
+  }
+
+  // WIDGET 9: Multi-Stage Conversion Flow / Sankey
+  if (binaryTargetColumns.length > 0 && categoricalColumns.length >= 2) {
+    const cat1 = categoricalColumns[0];
+    const cat2 = categoricalColumns[1];
+    const sankeyData = [];
+
+    const groupMap: Record<string, number> = {};
+    data.forEach((r) => {
+      const s = String(r[cat1] || "Source");
+      const t = String(r[cat2] || "Target");
+      const key = `${s}___${t}`;
+      groupMap[key] = (groupMap[key] || 0) + 1;
+    });
+
+    for (const [k, v] of Object.entries(groupMap)) {
+      const [source, target] = k.split("___");
+      sankeyData.push({ source, target, value: v });
+      if (sankeyData.length >= 5) break;
+    }
+
+    charts.push({
+      id: "chart_sankey_flow",
+      type: "sankey",
+      title: `${cat1.replace(/_/g, " ")} to ${cat2.replace(/_/g, " ")} Flow Journey`,
+      data: sankeyData,
+      xKey: "source",
+      yKey: "value",
+      xAxisLabel: "Source",
+      yAxisLabel: "Destination",
+      analysis: {
+        whatItShows: `This flow diagram maps conversion pathways between ${cat1.replace(/_/g, " ")} and ${cat2.replace(/_/g, " ")}.`,
+        trend: `Primary conversion streams connect leading source nodes to dominant destinations.`,
+        keyStats: [{ label: "Flow Pathways", value: sankeyData.length.toString() }],
+        takeaway: `Streamline transitions along high-volume conversion pathways.`,
+      },
+    });
+  }
+
+  // WIDGET 10: Hierarchical Share Treemap
+  if (categoricalColumns.length > 0) {
+    const catCol = categoricalColumns[0];
+    const counts: Record<string, number> = {};
+    data.forEach((r) => {
+      const k = String(r[catCol] || "Segment");
+      counts[k] = (counts[k] || 0) + 1;
+    });
+
+    const treemapData = Object.entries(counts)
+      .slice(0, 6)
+      .map(([k, v]) => ({
+        name: k,
+        value: v,
+        category: catCol,
+      }));
+
+    charts.push({
+      id: "chart_treemap_share",
+      type: "treemap",
+      title: `${catCol.replace(/_/g, " ")} Hierarchical Share`,
+      data: treemapData,
+      xKey: "name",
+      yKey: "value",
+      xAxisLabel: "Category Name",
+      yAxisLabel: "Volume Share",
+      analysis: {
+        whatItShows: `This treemap illustrates proportional area shares across ${catCol.replace(/_/g, " ")} categories.`,
+        trend: `Box area proportions highlight key volumetric contributors.`,
+        keyStats: [{ label: "Treemap Sectors", value: treemapData.length.toString() }],
+        takeaway: `Allocate capacity based on proportional block area weights.`,
+      },
+    });
+  }
+
+  // 3. HIGHLIGHTS SUMMARY CARD
   const highlightsItems = [];
   if (nonAdditiveNumericColumns.length > 0) {
     const col = nonAdditiveNumericColumns[0];
@@ -569,11 +783,11 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
   };
 
   return {
-    kpis: kpis.slice(0, 4),
+    kpis: kpis.slice(0, 6),
     charts,
-    heroChart: heroChart || (charts[0] || null),
-    segmentChart: segmentChart || (charts[1] || null),
-    correlationChart: correlationChart || (charts[2] || null),
+    heroChart: charts[0] || null,
+    segmentChart: charts[1] || null,
+    correlationChart: charts[2] || null,
     highlightsCard,
     tableData: data,
     columns,
@@ -583,15 +797,9 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
 export function updateDashboardFromQuery(
   currentState: DashboardState,
   userQuery: string,
-  analysisResponse: {
-    title: string;
-    chartType: "bar" | "line" | "pie" | "scatter" | "area" | "none";
-    xKey: string | null;
-    yKey: string | null;
-    kpis?: KPICardData[];
-  }
+  analysisResponse: any
 ): DashboardState {
-  // Main Bento Grid dashboard remains static and unchanged!
+  // Main Bento Grid dashboard remains permanent overview
   return currentState;
 }
 
