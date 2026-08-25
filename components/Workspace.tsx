@@ -18,6 +18,7 @@ import { BentoGrid } from "./BentoGrid";
 import { ChatPanel } from "./ChatPanel";
 import { CsvUploader } from "./CsvUploader";
 import { ChartModal } from "./ChartModal";
+import { StaticGrid } from "./ui/StaticGrid";
 import { LayoutGrid, MessageSquare, FileText } from "lucide-react";
 
 export const Workspace: React.FC = () => {
@@ -229,7 +230,7 @@ export const Workspace: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#212222] text-white">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#212222] text-white relative">
       {/* Sidebar Drawer */}
       <Sidebar
         sessions={sessions}
@@ -304,25 +305,50 @@ export const Workspace: React.FC = () => {
         {/* Content Body */}
         <div className="flex-1 min-h-0 overflow-hidden relative">
           {!activeSession ? (
-            /* Upload Screen */
+            /* Upload Screen (Uses RadialGradient + Tiles primitives internally) */
             <div className="h-full flex items-center justify-center p-6 overflow-y-auto">
               <CsvUploader onUploadCsv={handleUploadCsv} />
             </div>
           ) : (
-            /* Active Session Layout */
-            <div className="h-full w-full">
-              {activeTab === "split" && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 h-full overflow-hidden">
-                  {/* Left Column: Bento Grid Dashboard */}
-                  <div className="lg:col-span-7 h-full overflow-y-auto p-4 md:p-6 space-y-4 border-r border-white/10 no-scrollbar">
-                    <BentoGrid
-                      dashboardState={activeSession.dashboardState}
-                      onSelectChart={(chart) => setActiveModalChart(chart)}
-                    />
-                  </div>
+            /* Active Session Layout (Uses StaticGrid primitive ONLY) */
+            <div className="h-full w-full relative">
+              <StaticGrid />
+              <div className="relative z-10 h-full w-full">
+                {activeTab === "split" && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 h-full overflow-hidden">
+                    {/* Left Column: Bento Grid Dashboard */}
+                    <div className="lg:col-span-7 h-full overflow-y-auto p-4 md:p-6 space-y-4 border-r border-white/10 no-scrollbar">
+                      <BentoGrid
+                        dashboardState={activeSession.dashboardState}
+                        onSelectChart={(chart) => setActiveModalChart(chart)}
+                      />
+                    </div>
 
-                  {/* Right Column: AI Chat Panel */}
-                  <div className="lg:col-span-5 h-full overflow-hidden">
+                    {/* Right Column: AI Chat Panel */}
+                    <div className="lg:col-span-5 h-full overflow-hidden">
+                      <ChatPanel
+                        messages={activeSession.messages}
+                        onSendMessage={handleSendMessage}
+                        isLoading={isLoading}
+                        suggestions={activeSession.dashboardState.suggestions}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "dashboard" && (
+                  <div className="h-full overflow-y-auto p-4 md:p-6 no-scrollbar">
+                    <div className="max-w-7xl mx-auto">
+                      <BentoGrid
+                        dashboardState={activeSession.dashboardState}
+                        onSelectChart={(chart) => setActiveModalChart(chart)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "chat" && (
+                  <div className="h-full max-w-4xl mx-auto border-x border-white/10">
                     <ChatPanel
                       messages={activeSession.messages}
                       onSendMessage={handleSendMessage}
@@ -330,30 +356,8 @@ export const Workspace: React.FC = () => {
                       suggestions={activeSession.dashboardState.suggestions}
                     />
                   </div>
-                </div>
-              )}
-
-              {activeTab === "dashboard" && (
-                <div className="h-full overflow-y-auto p-4 md:p-6 no-scrollbar">
-                  <div className="max-w-7xl mx-auto">
-                    <BentoGrid
-                      dashboardState={activeSession.dashboardState}
-                      onSelectChart={(chart) => setActiveModalChart(chart)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "chat" && (
-                <div className="h-full max-w-4xl mx-auto border-x border-white/10">
-                  <ChatPanel
-                    messages={activeSession.messages}
-                    onSendMessage={handleSendMessage}
-                    isLoading={isLoading}
-                    suggestions={activeSession.dashboardState.suggestions}
-                  />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </div>
