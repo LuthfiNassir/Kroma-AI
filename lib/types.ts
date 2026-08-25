@@ -12,6 +12,12 @@ export type ChartType =
   | "sankey"
   | "none";
 
+export type DatasetArchetype =
+  | "FINANCIAL"
+  | "QUANTITATIVE_PROGRESS"
+  | "CATEGORICAL_OPERATIONAL"
+  | "CROSS_SECTIONAL_DISCOVERY";
+
 export interface KPICardData {
   label: string;
   value: string | number;
@@ -55,6 +61,7 @@ export interface HighlightsCardData {
 }
 
 export interface DashboardState {
+  profileType: DatasetArchetype;
   kpis: KPICardData[];
   charts: ChartDataSeries[];
   heroChart?: ChartDataSeries | null;
@@ -64,6 +71,12 @@ export interface DashboardState {
   tableData: Record<string, any>[];
   columns: string[];
   suggestions?: string[];
+  projectionData?: Record<string, any>[];
+  whatIfParams?: {
+    deltaPercent?: number;
+    deltaAmount?: number;
+    description?: string;
+  };
 }
 
 export interface ChatMessage {

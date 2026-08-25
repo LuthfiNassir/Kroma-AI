@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { DashboardState, ChartDataSeries } from "@/lib/types";
 import { MetricCard } from "./MetricCard";
 import { ChartCard } from "./ChartCard";
+import { WhatIfWidget } from "./WhatIfWidget";
 import { Table } from "./ui/Table";
 import { ChevronDown, ChevronUp, Table as TableIcon, Sparkles } from "lucide-react";
 
@@ -16,18 +17,45 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
   dashboardState,
   onSelectChart,
 }) => {
-  const { kpis, charts, highlightsCard, tableData, columns } = dashboardState;
+  const { profileType, kpis, charts, highlightsCard, tableData, columns, projectionData } = dashboardState;
   const [tableOpen, setTableOpen] = useState(false);
+  const [activeProjectionData, setActiveProjectionData] = useState(projectionData || []);
 
-  // Highlights Card items fallback
+  const handleApplyDelta = (deltaPercent: number, description: string) => {
+    if (!projectionData) return;
+    const updated = projectionData.map((item) => {
+      if (item.projected !== null && item.projected !== undefined) {
+        return {
+          ...item,
+          whatIf: Math.round((item.projected * (1 + deltaPercent / 100)) * 10) / 10,
+        };
+      }
+      return item;
+    });
+    setActiveProjectionData(updated);
+  };
+
   const highlightItems = highlightsCard?.items || [
     { label: "Data Quality Ratio", value: "100.0%", subtext: "0 schema anomalies" },
     { label: "Total Columns", value: `${columns.length} attrs`, subtext: "Successfully parsed" },
   ];
 
   return (
-    <div className="w-full space-y-4">
-      {/* 1. TOP EXECUTIVE KPI ROW (Responsive 4-Card Grid in Split View) */}
+    <div className="w-full space-y-5">
+      {/* Archetype Indicator Header */}
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FE6749] inline-block animate-pulse" />
+          <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+            [{profileType || "CROSS_SECTIONAL_DISCOVERY"} ARCHETYPE CANVAS]
+          </span>
+        </div>
+        <span className="rounded-full px-3 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/60">
+          [{charts.length} Visual Perspectives]
+        </span>
+      </div>
+
+      {/* 1. TOP EXECUTIVE KPI ROW (4 Archetype Cards) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {kpis.slice(0, 4).map((kpi, idx) => (
           <div key={idx} className="min-w-0">
@@ -36,7 +64,7 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
         ))}
       </div>
 
-      {/* 2. AUTONOMOUS DYNAMIC BENTO GRID (12-Column Responsive Layout) */}
+      {/* 2. AUTONOMOUS ARCHETYPE BENTO GRID */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         {charts.map((chartWidget, idx) => {
           let colSpanClass = "md:col-span-6";
@@ -63,7 +91,7 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
           );
         })}
 
-        {/* HIGHLIGHTS SUMMARY CARD (Span 6 / 12 Columns) */}
+        {/* HIGHLIGHTS SUMMARY CARD */}
         <div className="md:col-span-6 rounded-3xl bg-[#18191b] border border-white/10 p-5 flex flex-col justify-between shadow-xl relative overflow-hidden">
           <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2.5">
             <div className="flex items-center gap-2">
@@ -77,7 +105,6 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
             </span>
           </div>
 
-          {/* Highlights Items Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-auto">
             {highlightItems.map((item, idx) => (
               <div
@@ -101,7 +128,13 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
         </div>
       </div>
 
-      {/* 3. BOTTOM ROW: Collapsible Full Dataset Table */}
+      {/* 3. INTERACTIVE WHAT-IF SCENARIO WIDGET */}
+      <WhatIfWidget
+        projectionData={activeProjectionData}
+        onApplyDelta={handleApplyDelta}
+      />
+
+      {/* 4. BOTTOM ROW: Collapsible Full Dataset Table */}
       <div className="rounded-2xl bg-[#18191b] border border-white/10 overflow-hidden">
         <button
           type="button"
