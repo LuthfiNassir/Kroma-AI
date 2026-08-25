@@ -1,5 +1,8 @@
-import React, { useRef, ChangeEvent } from "react";
-import { FileSpreadsheet, Play } from "lucide-react";
+"use client";
+
+import React, { useRef, useState } from "react";
+import { RadialGradient } from "@/components/ui/RadialGradient";
+import { Tiles } from "@/components/ui/Tiles";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { SAMPLE_DATASETS } from "@/lib/dataEngine";
 
@@ -9,144 +12,127 @@ interface CsvUploaderProps {
 
 export const CsvUploader: React.FC<CsvUploaderProps> = ({ onUploadCsv }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files[0]) {
+      processFile(files[0]);
+    }
+  };
 
+  const processFile = (file: File) => {
+    if (!file.name.endsWith(".csv")) {
+      alert("[Error: Please upload a valid .csv file]");
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      const content = evt.target?.result as string;
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
       if (content) {
         onUploadCsv(content, file.name);
       }
     };
     reader.readAsText(file);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const content = evt.target?.result as string;
-      if (content) {
-        onUploadCsv(content, file.name);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-  };
-
-  const loadSample = (sampleKey: keyof typeof SAMPLE_DATASETS, sampleName: string) => {
-    onUploadCsv(SAMPLE_DATASETS[sampleKey], `${sampleName}.csv`);
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-8 text-center py-6">
-      {/* Kroma Hero Section Header */}
-      <div className="space-y-3">
-        <div className="text-xs font-semibold text-[#FE6749] tracking-widest uppercase mb-3 font-mono">
-          KROMA · AUTONOMOUS DATA INTELLIGENCE
+    <div className="relative min-h-[calc(100vh-60px)] w-full flex flex-col items-center justify-center p-6 overflow-hidden bg-[#212222]">
+      {/* 1. Ambient Radial Glow Background (-z-20) */}
+      <RadialGradient
+        gradientFrom="rgba(165, 50, 158, 0.16)"
+        gradientPosition="50% 15%"
+        gradientSize="100% 100%"
+        gradientTo="#212222"
+      />
+
+      {/* 2. Interactive Animated Tiles Layer (-z-10) */}
+      <Tiles cols={16} rows={35} tileSize="md" />
+
+      {/* 3. Foreground Hero & Dropzone (relative z-10) */}
+      <div className="relative z-10 max-w-2xl w-full text-center space-y-6">
+        {/* Brand Header */}
+        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+          <BrandMark className="w-4 h-4" />
+          <span className="text-[11px] font-mono tracking-widest text-[#FE6749] uppercase font-bold">
+            KROMA · AUTONOMOUS DATA INTELLIGENCE
+          </span>
         </div>
-        <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-white leading-tight font-sans">
-          Transform spreadsheets<br />into <span className="text-[#FE6749]">visual intelligence.</span>
+
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-tight font-sans">
+          Transform spreadsheets <br />
+          into <span className="text-[#FE6749]">visual intelligence.</span>
         </h1>
-        <p className="text-sm md:text-base text-white/60 max-w-xl mx-auto mt-3 mb-8">
+
+        <p className="text-sm text-white/60 max-w-lg mx-auto leading-relaxed font-sans">
           Drop any CSV dataset to instantly generate executive Bento dashboards, statistical correlations, and conversational insights.
         </p>
-      </div>
 
-      {/* Upload Dropzone Card */}
-      <div
-        onClick={() => fileInputRef.current?.click()}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        className="rounded-3xl border-2 border-dashed border-white/15 hover:border-[#FE6749]/50 bg-[#18191b]/60 p-10 backdrop-blur-sm transition-all cursor-pointer group shadow-2xl space-y-4 max-w-2xl mx-auto"
-      >
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept=".csv"
-          className="hidden"
-        />
+        {/* Upload Dropzone Surface */}
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+              processFile(e.dataTransfer.files[0]);
+            }
+          }}
+          className={`relative rounded-3xl border-2 border-dashed p-10 backdrop-blur-md transition-all cursor-pointer bg-[#18191b]/80 shadow-2xl ${
+            isDragging
+              ? "border-[#FE6749] bg-[#FE6749]/10 scale-[1.01]"
+              : "border-white/15 hover:border-[#FE6749]/50 hover:bg-[#18191b]/95"
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={handleFileChange}
+          />
 
-        <div className="mx-auto w-12 h-12 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-          <BrandMark className="w-12 h-12" />
+          <div className="flex flex-col items-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/80">
+              <BrandMark className="w-6 h-6" />
+            </div>
+            <div className="text-sm font-semibold text-white font-sans">
+              Drag & drop your CSV file here, or <span className="text-[#FE6749] underline">[browse]</span>
+            </div>
+            <div className="text-xs text-white/40 font-mono">
+              Supports any tabular schema · 100% on-device compute
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-1">
-          <h3 className="text-base font-semibold text-white tracking-tight">
-            Drag & drop CSV file or click to browse
-          </h3>
-          <p className="text-xs text-white/40">
-            Supports any delimited dataset up to 50MB. Local privacy guaranteed.
-          </p>
-        </div>
-
-        <div className="pt-2">
-          <span className="rounded-full px-5 py-2 text-xs font-semibold bg-[#FE6749] text-white shadow-lg hover:bg-[#e85a3c] transition inline-flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>[Choose CSV File]</span>
-          </span>
-        </div>
-      </div>
-
-      {/* Preset Sample Dataset Chips */}
-      <div className="space-y-3 max-w-2xl mx-auto pt-2">
-        <div className="text-center">
-          <span className="text-[11px] font-semibold text-white/40 uppercase tracking-widest font-mono">
-            [Instant Test Datasets]
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Sample Dataset Pills */}
+        <div className="flex items-center justify-center gap-2 flex-wrap pt-2">
+          <span className="text-xs text-white/40 font-mono">[Or try sample demo]:</span>
           <button
             type="button"
-            onClick={() => loadSample("department", "Department_Store")}
-            className="rounded-2xl bg-[#18191b] border border-white/10 p-3.5 text-left hover:border-[#FE6749]/50 hover:bg-white/5 transition cursor-pointer group flex flex-col justify-between"
+            onClick={() => onUploadCsv(SAMPLE_DATASETS.sales, "sample_sales.csv")}
+            className="rounded-full px-3 py-1 bg-white/5 border border-white/10 text-xs text-white/80 hover:border-[#FE6749]/50 hover:text-white transition font-mono cursor-pointer"
           >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-semibold text-white font-mono">
-                [Sample: Department Store]
-              </span>
-              <Play className="w-3 h-3 text-[#FE6749] opacity-0 group-hover:opacity-100 transition" />
-            </div>
-            <p className="text-[10px] text-white/40 font-mono">5 departments • Budgets & headcount</p>
+            [Sample: Sales]
           </button>
-
           <button
             type="button"
-            onClick={() => loadSample("sales", "SaaS_Revenue_Metrics")}
-            className="rounded-2xl bg-[#18191b] border border-white/10 p-3.5 text-left hover:border-[#A5329E]/50 hover:bg-white/5 transition cursor-pointer group flex flex-col justify-between"
+            onClick={() => onUploadCsv(SAMPLE_DATASETS.department, "sample_department.csv")}
+            className="rounded-full px-3 py-1 bg-white/5 border border-white/10 text-xs text-white/80 hover:border-[#FE6749]/50 hover:text-white transition font-mono cursor-pointer"
           >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-semibold text-white font-mono">
-                [Sample: SaaS Revenue Metrics]
-              </span>
-              <Play className="w-3 h-3 text-[#A5329E] opacity-0 group-hover:opacity-100 transition" />
-            </div>
-            <p className="text-[10px] text-white/40 font-mono">13 records • Regional sales & reps</p>
+            [Sample: Department]
           </button>
-
           <button
             type="button"
-            onClick={() => loadSample("marketing", "Healthcare_Stroke_Risk")}
-            className="rounded-2xl bg-[#18191b] border border-white/10 p-3.5 text-left hover:border-emerald-500/50 hover:bg-white/5 transition cursor-pointer group flex flex-col justify-between"
+            onClick={() => onUploadCsv(SAMPLE_DATASETS.marketing, "sample_marketing.csv")}
+            className="rounded-full px-3 py-1 bg-white/5 border border-white/10 text-xs text-white/80 hover:border-[#FE6749]/50 hover:text-white transition font-mono cursor-pointer"
           >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-semibold text-white font-mono">
-                [Sample: Healthcare Stroke Risk]
-              </span>
-              <Play className="w-3 h-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition" />
-            </div>
-            <p className="text-[10px] text-white/40 font-mono">5 campaigns • Spend & ROI metrics</p>
+            [Sample: Marketing]
           </button>
         </div>
       </div>
