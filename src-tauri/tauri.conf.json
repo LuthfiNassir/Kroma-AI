@@ -1,88 +1,53 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/tooling/cli/schema.json",
+  "productName": "Kroma",
+  "version": "1.0.0",
+  "identifier": "com.kroma.analytics",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:3000",
-    "distDir": "../out"
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../out"
   },
-  "package": {
-    "productName": "Kroma",
-    "version": "1.0.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "http": {
-        "all": true,
-        "request": true,
-        "scope": ["http://localhost:11434/*", "http://127.0.0.1:11434/*"]
-      },
-      "fs": {
-        "all": true,
-        "scope": ["$APPDATA/*", "$DOWNLOAD/*"]
-      },
-      "dialog": {
-        "all": true,
-        "open": true,
-        "save": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "category": "DeveloperTool",
-      "copyright": "Kroma Analytics 2026",
-      "deb": {
-        "depends": []
-      },
-      "externalBin": [],
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "identifier": "com.kroma.analytics",
-      "longDescription": "Autonomous, local-first data analyst delivering instant Bento dashboards and executive intelligence with zero cloud exposure.",
-      "macOS": {
-        "frameworks": [],
-        "minimumSystemVersion": "",
-        "exceptionDomain": "",
-        "signingIdentity": null,
-        "entitlements": null
-      },
-      "resources": [],
-      "shortDescription": "Kroma Autonomous Data Analyst",
-      "targets": "all",
-      "windows": {
-        "certificateThumbprint": null,
-        "digestAlgorithm": "sha256",
-        "timestampUrl": "",
-        "wix": {
-          "language": "en-US"
-        }
-      }
-    },
-    "security": {
-      "csp": "default-src 'self' http://localhost:11434 http://127.0.0.1:11434; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; img-src 'self' data: blob:;"
-    },
-    "updater": {
-      "active": false
-    },
+  "app": {
     "windows": [
       {
-        "fullscreen": false,
-        "height": 860,
-        "minHeight": 650,
-        "minWidth": 950,
-        "resizable": true,
         "title": "Kroma — Autonomous Data Analyst",
         "width": 1380,
-        "theme": "Dark",
-        "transparent": false,
-        "decorations": true
+        "height": 860,
+        "minWidth": 950,
+        "minHeight": 650,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "theme": "Dark"
       }
-    ]
+    ],
+    "security": {
+      "csp": "default-src 'self' http://localhost:11434 http://127.0.0.1:11434; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; img-src 'self' data: blob:;"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "copyright": "Kroma Analytics 2026",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "longDescription": "Autonomous, local-first data analyst delivering instant Bento dashboards and executive intelligence with zero cloud exposure.",
+    "shortDescription": "Kroma Autonomous Data Analyst",
+    "targets": "all",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "wix": {
+        "language": "en-US"
+      }
+    }
   }
 }
