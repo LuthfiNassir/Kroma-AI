@@ -45,6 +45,12 @@ export const Workspace: React.FC = () => {
     const parsed = parseCsvContent(csvContent);
     const initialDashboard = generateInitialDashboard(parsed);
 
+    const topChart = initialDashboard.charts[0];
+    const topKpi = initialDashboard.kpis[1];
+
+    const takeawayText = topChart?.analysis?.whatItShows || 
+      `Total revenue/value is ${topKpi?.value || 0} across ${parsed.rowCount} transactions. Primary category commands dominant volume share.`;
+
     const newSessionId = `session_${Date.now()}`;
     const newSession: AnalysisSession = {
       sessionId: newSessionId,
@@ -58,7 +64,7 @@ export const Workspace: React.FC = () => {
           role: "assistant",
           content: `Parsed dataset "${fileName}" containing ${parsed.rowCount} rows and ${parsed.columns.length} attributes. Executive Bento dashboard cards have been generated on your workspace. Ask any query below.`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          insight: `Columns detected: ${parsed.columns.slice(0, 6).join(", ")}${parsed.columns.length > 6 ? "..." : ""}`,
+          insight: takeawayText,
         },
       ],
       dashboardState: initialDashboard,
@@ -321,6 +327,7 @@ export const Workspace: React.FC = () => {
                       messages={activeSession.messages}
                       onSendMessage={handleSendMessage}
                       isLoading={isLoading}
+                      suggestions={activeSession.dashboardState.suggestions}
                     />
                   </div>
                 </div>
@@ -343,6 +350,7 @@ export const Workspace: React.FC = () => {
                     messages={activeSession.messages}
                     onSendMessage={handleSendMessage}
                     isLoading={isLoading}
+                    suggestions={activeSession.dashboardState.suggestions}
                   />
                 </div>
               )}

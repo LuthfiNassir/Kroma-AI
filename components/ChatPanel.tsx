@@ -8,6 +8,7 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   onSendMessage: (prompt: string) => void;
   isLoading: boolean;
+  suggestions?: string[];
 }
 
 // Lightweight structured markdown renderer
@@ -90,17 +91,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
   onSendMessage,
   isLoading,
+  suggestions,
 }) => {
   const [openSqlId, setOpenSqlId] = useState<string | null>(null);
   const [inputPrompt, setInputPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const suggestions = [
-    "tell me what all factors affect a person to get a stroke",
-    "What factors make users cancel their subscription?",
-    "Why are employees leaving the company?",
-    "Which profiles represent highest default risk?",
+  const defaultSuggestions = [
+    "Which product generates highest revenue?",
+    "Show average order value by item",
+    "Compare unit sales vs revenue",
+    "Summarize top performing categories",
   ];
+
+  const activeSuggestions = suggestions && suggestions.length > 0 ? suggestions : defaultSuggestions;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -287,13 +291,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       <div className="shrink-0 p-4 pt-2 border-t border-white/10 bg-[#212222] space-y-2">
         {/* Suggestion Chips */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {suggestions.map((s, i) => (
+          {activeSuggestions.map((s, i) => (
             <button
               key={i}
               type="button"
               onClick={() => handleSend(s)}
               disabled={isLoading}
-              className="rounded-full px-3 py-1 bg-white/5 border border-white/10 hover:border-[#FE6749]/60 text-xs text-white/80 whitespace-nowrap transition cursor-pointer disabled:opacity-50"
+              className="rounded-full px-3 py-1 bg-white/5 border border-white/10 hover:border-[#FE6749]/60 text-xs text-white/80 whitespace-nowrap transition cursor-pointer disabled:opacity-50 font-mono"
             >
               {s}
             </button>

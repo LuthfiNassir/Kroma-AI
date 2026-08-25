@@ -67,20 +67,16 @@ const CustomBoxPlotRenderer: React.FC<{ data: any[]; accentColor: string }> = ({
               <span className="text-white/40">Med: {median} | Range: [{min} - {max}]</span>
             </div>
             <div className="h-6 w-full relative bg-white/5 rounded-md overflow-hidden flex items-center px-1">
-              {/* Whisker Line */}
               <div
                 className="absolute h-0.5 bg-white/30"
                 style={{ left: `${minPct}%`, width: `${maxPct - minPct}%` }}
               />
-              {/* Whisker End Caps */}
               <div className="absolute h-3 w-0.5 bg-white/40" style={{ left: `${minPct}%` }} />
               <div className="absolute h-3 w-0.5 bg-white/40" style={{ left: `${maxPct}%` }} />
-              {/* Q1-Q3 Box */}
               <div
                 className="absolute h-4 rounded bg-[#A5329E]/40 border border-[#FE88ED]/50"
                 style={{ left: `${q1Pct}%`, width: `${boxWidthPct}%` }}
               />
-              {/* Median Line */}
               <div
                 className="absolute h-4 w-1 bg-[#FE6749] z-10 rounded-full"
                 style={{ left: `${medianPct}%` }}
@@ -148,62 +144,6 @@ const CustomHeatmapRenderer: React.FC<{ data: any[]; accentColor: string }> = ({
   );
 };
 
-// Custom SVG Renderer for Sankey Flow Diagram
-const CustomSankeyRenderer: React.FC<{ data: any[] }> = ({ data }) => {
-  if (!data || !Array.isArray(data) || data.length === 0) return null;
-
-  const sources = Array.from(new Set(data.map((d) => String(d.source || "Source"))));
-  const targets = Array.from(new Set(data.map((d) => String(d.target || "Target"))));
-
-  const totalVal = data.reduce((acc, curr) => acc + (Number(curr.value) || 0), 0);
-
-  return (
-    <div className="w-full h-full flex items-center justify-between p-4 font-mono relative overflow-hidden">
-      {/* Sources Column */}
-      <div className="flex flex-col justify-around h-full space-y-2 z-10">
-        {sources.map((s, idx) => (
-          <div
-            key={idx}
-            className="rounded-xl bg-[#FE6749] border border-white/20 px-3 py-1.5 text-xs font-bold text-white shadow-lg text-center truncate max-w-[120px]"
-          >
-            {s}
-          </div>
-        ))}
-      </div>
-
-      {/* Connection Flow List */}
-      <div className="flex-1 px-4 space-y-2 my-auto z-10">
-        {data.slice(0, 5).map((flow, idx) => {
-          const val = Number(flow.value) || 0;
-          const pct = totalVal > 0 ? Math.round((val / totalVal) * 100) : 0;
-          return (
-            <div
-              key={idx}
-              className="rounded-lg bg-white/5 border border-white/10 p-2 flex items-center justify-between text-[10px] text-white/80"
-            >
-              <span className="text-[#FE6749] font-semibold">{flow.source}</span>
-              <span className="text-white/40">-- {val} ({pct}%) --&gt;</span>
-              <span className="text-[#A5329E] font-semibold">{flow.target}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Targets Column */}
-      <div className="flex flex-col justify-around h-full space-y-2 z-10">
-        {targets.map((t, idx) => (
-          <div
-            key={idx}
-            className="rounded-xl bg-[#A5329E] border border-white/20 px-3 py-1.5 text-xs font-bold text-white shadow-lg text-center truncate max-w-[120px]"
-          >
-            {t}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 export const ChartCard: React.FC<ChartCardProps> = ({
   series,
   defaultType = "bar",
@@ -230,11 +170,13 @@ export const ChartCard: React.FC<ChartCardProps> = ({
 
   const xAxisTitle = series.xAxisLabel || series.xKey || "Category";
   const yAxisTitle = series.yAxisLabel || series.yKey || "Value";
-  const zAxisTitle = series.zAxisLabel || "Intensity";
 
   // Data key mappers
   const xKey = series.xKey || (series.data[0]?.label !== undefined ? "label" : series.data[0]?.x !== undefined ? "x" : "name");
   const yKey = series.yKey || (series.data[0]?.value !== undefined ? "value" : series.data[0]?.y !== undefined ? "y" : "value");
+
+  // Calculate total volume for pie/donut legend percentage
+  const totalPieVolume = series.data.reduce((acc, curr) => acc + (Number(curr[yKey]) || 0), 0);
 
   return (
     <div
@@ -254,27 +196,25 @@ export const ChartCard: React.FC<ChartCardProps> = ({
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4 pr-16 group-hover:pr-28 transition-all">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-white tracking-tight uppercase font-mono truncate">
             {series.title || "[Data Visualization]"}
           </h3>
-          <p className="text-[11px] text-white/50 tracking-wider font-mono">
-            Axis: {xAxisTitle} vs {yAxisTitle} {series.zAxisLabel ? `vs ${zAxisTitle}` : ""}
+          <p className="text-xs text-white/50 font-mono truncate">
+            Axis: {xAxisTitle} vs {yAxisTitle}
           </p>
         </div>
-        <div className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/70 shrink-0">
+        <div className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/70 shrink-0 ml-2">
           [{chartType.toUpperCase()} CHART]
         </div>
       </div>
 
       {/* Explicit Height Chart Canvas Container */}
-      <div className="w-full h-[260px] min-h-[260px] relative font-mono">
+      <div className="w-full h-[220px] min-h-[220px] relative font-mono">
         {chartType === "boxplot" ? (
           <CustomBoxPlotRenderer data={series.data} accentColor={accentColor} />
         ) : chartType === "heatmap" ? (
           <CustomHeatmapRenderer data={series.data} accentColor={accentColor} />
-        ) : chartType === "sankey" ? (
-          <CustomSankeyRenderer data={series.data} />
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             {chartType === "area" ? (
@@ -362,8 +302,8 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   nameKey={xKey}
                   cx="50%"
                   cy="50%"
-                  innerRadius={55}
-                  outerRadius={85}
+                  innerRadius={45}
+                  outerRadius={75}
                   paddingAngle={4}
                 >
                   {series.data.map((entry, index) => (
@@ -392,24 +332,6 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   }}
                 />
                 <Scatter data={series.data} fill={accentColor} />
-              </ScatterChart>
-            ) : chartType === "bubble" ? (
-              <ScatterChart margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
-                <XAxis dataKey="x" type="number" stroke="rgba(255, 255, 255, 0.4)" fontSize={11} />
-                <YAxis dataKey="y" type="number" stroke="rgba(255, 255, 255, 0.4)" fontSize={11} />
-                <ZAxis dataKey="z" range={[60, 400]} />
-                <Tooltip
-                  cursor={{ strokeDasharray: "3 3" }}
-                  contentStyle={{
-                    backgroundColor: "#212222",
-                    borderColor: "rgba(255, 255, 255, 0.15)",
-                    borderRadius: "12px",
-                    color: "#ffffff",
-                    fontSize: "12px",
-                  }}
-                />
-                <Scatter data={series.data} fill={secondaryColor} />
               </ScatterChart>
             ) : chartType === "treemap" ? (
               <Treemap
@@ -449,6 +371,29 @@ export const ChartCard: React.FC<ChartCardProps> = ({
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* DEDICATED STRUCTURED DONUT CHART LEGEND */}
+      {chartType === "pie" && (
+        <div className="mt-3 pt-3 border-t border-white/10 font-mono text-[11px] grid grid-cols-2 gap-1.5">
+          {series.data.map((item, idx) => {
+            const catName = String(item[xKey] || item.label || item.name || `Item ${idx + 1}`);
+            const val = Number(item[yKey] || item.value) || 0;
+            const pct = item.pct || (totalPieVolume > 0 ? ((val / totalPieVolume) * 100).toFixed(1) : "0");
+            const color = COLOR_PALETTE[idx % COLOR_PALETTE.length];
+
+            return (
+              <div key={idx} className="flex items-center gap-1.5 truncate">
+                <span
+                  className="w-2.5 h-2.5 rounded-sm shrink-0 inline-block"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="text-white/80 font-medium truncate">{catName}:</span>
+                <span className="text-white/50 font-bold shrink-0">{val} ({pct}%)</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

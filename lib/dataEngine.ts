@@ -133,6 +133,54 @@ export function parseCsvContent(csvString: string): ParsedCsvResult {
   };
 }
 
+// Dataset-Aware Suggestion Generator
+export function generateDatasetSuggestions(columns: string[], data: Record<string, any>[]): string[] {
+  const colStr = columns.join(" ").toLowerCase();
+
+  const isRetail =
+    colStr.includes("product") ||
+    colStr.includes("amount") ||
+    colStr.includes("sales") ||
+    colStr.includes("units") ||
+    colStr.includes("price") ||
+    colStr.includes("revenue") ||
+    colStr.includes("dept") ||
+    colStr.includes("budget");
+
+  const isHealthcare =
+    colStr.includes("stroke") ||
+    colStr.includes("hypertension") ||
+    colStr.includes("glucose") ||
+    colStr.includes("bmi") ||
+    colStr.includes("age") ||
+    colStr.includes("patient");
+
+  if (isRetail) {
+    return [
+      "Which product generates highest revenue?",
+      "Show average order value by item",
+      "Compare unit sales vs revenue",
+      "Summarize top performing categories",
+    ];
+  }
+
+  if (isHealthcare) {
+    return [
+      "What factors drive stroke risk?",
+      "Show age vs hypertension correlation",
+      "Compare stroke rate by gender",
+      "Summarize high risk cohorts",
+    ];
+  }
+
+  return [
+    "Summarize key metrics",
+    "Show distribution of highest values",
+    "Identify primary outliers",
+    "Rank top performing segments",
+  ];
+}
+
 export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardState {
   const {
     data,
@@ -141,11 +189,10 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     nonAdditiveNumericColumns,
     additiveNumericColumns,
     categoricalColumns,
-    dateColumns,
     rowCount,
   } = parsed;
 
-  // 1. TOP KPI ROW (4 to 6 Clean Executive Cards)
+  // 1. TOP KPI ROW (4 Executive Cards)
   const kpis: KPICardData[] = [
     {
       label: "TOTAL RECORDS",
@@ -154,424 +201,247 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     },
   ];
 
-  // KPI 2: Primary Numeric Metric (Mean / Sum)
-  if (nonAdditiveNumericColumns.length > 0) {
-    const col = nonAdditiveNumericColumns[0];
-    const vals = data.map((r) => Number(r[col])).filter((v) => !isNaN(v));
-    const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-    const minVal = vals.length > 0 ? Math.min(...vals) : 0;
-    const maxVal = vals.length > 0 ? Math.max(...vals) : 0;
+  // Primary Category Column & Primary Numeric Column Fallbacks
+  const primaryCatCol = categoricalColumns[0] || columns.find((c) => !parsed.idColumns.includes(c)) || "Category";
+  const primaryNumCol = additiveNumericColumns[0] || nonAdditiveNumericColumns[0] || columns.find((c) => typeof data[0]?.[c] === "number") || "Value";
 
-    // FIX: Removed literal "font-sans" string leak
-    kpis.push({
-      label: `AVERAGE ${col.replace(/_/g, " ").toUpperCase()}`,
-      value: `${avg.toFixed(1)}${col.toLowerCase().includes("age") ? " yrs" : ""}`,
-      subtext: `Range: ${minVal.toFixed(1)} to ${maxVal.toFixed(1)}`,
-    });
-  } else if (additiveNumericColumns.length > 0) {
-    const col = additiveNumericColumns[0];
-    const vals = data.map((r) => Number(r[col])).filter((v) => !isNaN(v));
-    const total = vals.reduce((a, b) => a + b, 0);
-    const formattedLabel = `TOTAL ${col.replace(/_/g, " ").toUpperCase()}`;
-    const isCurrency =
-      formattedLabel.includes("SALES") ||
-      formattedLabel.includes("REVENUE") ||
-      formattedLabel.includes("PRICE") ||
-      formattedLabel.includes("COST") ||
-      formattedLabel.includes("AMOUNT") ||
-      formattedLabel.includes("BUDGET");
+  // KPI 2: Primary Total / Sum or Mean
+  const numVals = data.map((r) => Number(r[primaryNumCol])).filter((v) => !isNaN(v));
+  const totalNum = numVals.reduce((a, b) => a + b, 0);
+  const avgNum = numVals.length > 0 ? totalNum / numVals.length : 0;
 
-    const formattedValue = isCurrency
-      ? `$${total >= 1000000 ? (total / 1000000).toFixed(1) + "M" : total >= 1000 ? (total / 1000).toFixed(1) + "K" : total.toLocaleString()}`
-      : total.toLocaleString();
+  const isCurrency =
+    primaryNumCol.toLowerCase().includes("amount") ||
+    primaryNumCol.toLowerCase().includes("sales") ||
+    primaryNumCol.toLowerCase().includes("revenue") ||
+    primaryNumCol.toLowerCase().includes("price") ||
+    primaryNumCol.toLowerCase().includes("cost") ||
+    primaryNumCol.toLowerCase().includes("budget");
 
-    kpis.push({
-      label: formattedLabel,
-      value: formattedValue,
-      subtext: `Sum across ${vals.length} records`,
-    });
-  }
+  kpis.push({
+    label: `TOTAL ${primaryNumCol.replace(/_/g, " ").toUpperCase()}`,
+    value: isCurrency
+      ? `$${totalNum >= 1000000 ? (totalNum / 1000000).toFixed(1) + "M" : totalNum >= 1000 ? (totalNum / 1000).toFixed(1) + "K" : totalNum.toLocaleString()}`
+      : totalNum.toLocaleString(),
+    subtext: `Sum across ${rowCount} records`,
+  });
 
-  // KPI 3: Binary Target Rate
-  if (binaryTargetColumns.length > 0) {
-    const targetCol = binaryTargetColumns[0];
-    const positiveCount = data.filter((r) => Number(r[targetCol]) === 1).length;
-    const ratePct = rowCount > 0 ? ((positiveCount / rowCount) * 100).toFixed(1) : "0.0";
+  // KPI 3: Average Value
+  kpis.push({
+    label: `AVERAGE ${primaryNumCol.replace(/_/g, " ").toUpperCase()}`,
+    value: isCurrency ? `$${avgNum.toFixed(1)}` : `${avgNum.toFixed(1)}${primaryNumCol.toLowerCase().includes("age") ? " yrs" : ""}`,
+    subtext: `Mean per entry`,
+  });
 
-    kpis.push({
-      label: `${targetCol.replace(/_/g, " ").toUpperCase()} RATE`,
-      value: `${ratePct}%`,
-      subtext: `${positiveCount.toLocaleString()} / ${rowCount.toLocaleString()} cases`,
-    });
-  }
+  // KPI 4: Dominant Segment Share
+  const catCounts: Record<string, number> = {};
+  data.forEach((r) => {
+    const k = String(r[primaryCatCol] || "Unassigned");
+    catCounts[k] = (catCounts[k] || 0) + 1;
+  });
+  const sortedCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
+  const dominantCat = sortedCats[0] ? sortedCats[0][0] : "None";
+  const dominantPct = rowCount > 0 && sortedCats[0] ? ((sortedCats[0][1] / rowCount) * 100).toFixed(1) : "0";
 
-  // KPI 4: Secondary Metric / Mean
-  if (nonAdditiveNumericColumns.length > 1) {
-    const col = nonAdditiveNumericColumns[1];
-    const vals = data.map((r) => Number(r[col])).filter((v) => !isNaN(v));
-    const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  kpis.push({
+    label: `PRIMARY ${primaryCatCol.replace(/_/g, " ").toUpperCase()}`,
+    value: dominantCat,
+    subtext: `${dominantPct}% population share`,
+  });
 
-    kpis.push({
-      label: `AVERAGE ${col.replace(/_/g, " ").toUpperCase()}`,
-      value: avg.toFixed(1),
-      subtext: `Across ${vals.length} entries`,
-    });
-  }
-
-  // KPI 5: Dominant Category Share
-  if (categoricalColumns.length > 0) {
-    const catCol = categoricalColumns[0];
-    const counts: Record<string, number> = {};
-    data.forEach((r) => {
-      const val = String(r[catCol] || "Unassigned");
-      counts[val] = (counts[val] || 0) + 1;
-    });
-    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    const dominant = sorted[0] ? sorted[0][0] : "None";
-    const domCount = sorted[0] ? sorted[0][1] : 0;
-    const pct = rowCount > 0 ? ((domCount / rowCount) * 100).toFixed(1) : "0";
-
-    kpis.push({
-      label: `PRIMARY ${catCol.replace(/_/g, " ").toUpperCase()}`,
-      value: dominant,
-      subtext: `${pct}% of population`,
-    });
-  }
-
-  // 2. POWERBI-GRADE 6 TO 8 POPULATED CHART SERIES
+  // 2. GUARANTEED MULTI-CHART ANALYTICAL SUITE (4 to 6 Perspectives for ANY dataset)
   const charts: ChartDataSeries[] = [];
 
-  // CHART 1: Age Distribution (Binned Histogram - 0-18, 19-35, 36-50, 51-65, 65+)
-  const ageCol = nonAdditiveNumericColumns.find((c) => c.toLowerCase().includes("age")) || nonAdditiveNumericColumns[0];
-  if (ageCol) {
-    const ageBrackets = [
-      { label: "0-18", min: 0, max: 18, value: 0 },
-      { label: "19-35", min: 19, max: 35, value: 0 },
-      { label: "36-50", min: 36, max: 50, value: 0 },
-      { label: "51-65", min: 51, max: 65, value: 0 },
-      { label: "65+", min: 66, max: 150, value: 0 },
-    ];
+  // PERSPECTIVE 1 — Total Revenue / Value by Category (Bar Chart)
+  const catSumMap: Record<string, number> = {};
+  data.forEach((r) => {
+    const k = String(r[primaryCatCol] || "Other");
+    const v = Number(r[primaryNumCol]) || 0;
+    catSumMap[k] = (catSumMap[k] || 0) + v;
+  });
 
-    data.forEach((r) => {
-      const val = Number(r[ageCol]);
-      if (isNaN(val)) return;
-      const bracket = ageBrackets.find((b) => val >= b.min && val <= b.max);
-      if (bracket) bracket.value++;
-    });
-
-    const chartData = ageBrackets.map((b) => ({ label: b.label, value: b.value }));
-    const totalVals = data.map((r) => Number(r[ageCol])).filter((v) => !isNaN(v));
-    const avgAge = totalVals.length > 0 ? totalVals.reduce((a, b) => a + b, 0) / totalVals.length : 0;
-
-    charts.push({
-      id: "chart_age_distribution",
-      type: "bar",
-      title: `${ageCol.replace(/_/g, " ")} Distribution Brackets`,
-      data: chartData,
-      xKey: "label",
-      yKey: "value",
-      xAxisLabel: `${ageCol.replace(/_/g, " ")} Bracket`,
-      yAxisLabel: "Population Count",
-      analysis: {
-        whatItShows: `This histogram groups records into ${ageCol.replace(/_/g, " ")} brackets (0-18, 19-35, 36-50, 51-65, 65+).`,
-        trend: `The average age across the dataset is ${avgAge.toFixed(1)} years, with primary concentration in middle brackets.`,
-        keyStats: [
-          { label: "Average Age", value: `${avgAge.toFixed(1)} yrs` },
-          { label: "Total Population", value: totalVals.length.toString() },
-        ],
-        takeaway: `Focus targeted health and service offerings toward primary demographic brackets.`,
-      },
-    });
-  }
-
-  // CHART 2: Gender / Primary Categorical Share (Donut Chart)
-  const genderCol = categoricalColumns.find((c) => c.toLowerCase().includes("gender") || c.toLowerCase().includes("sex")) || categoricalColumns[0];
-  if (genderCol) {
-    const counts: Record<string, number> = {};
-    data.forEach((r) => {
-      const k = String(r[genderCol] || "Unassigned");
-      counts[k] = (counts[k] || 0) + 1;
-    });
-
-    const chartData = Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([k, v]) => ({
-        label: k,
-        name: k,
-        value: v,
-        pct: rowCount > 0 ? ((v / rowCount) * 100).toFixed(1) : "0",
-      }));
-
-    const topCat = chartData[0] ? chartData[0].label : "N/A";
-    const topPct = chartData[0] ? chartData[0].pct : "0";
-
-    charts.push({
-      id: "chart_gender_donut",
-      type: "pie",
-      title: `${genderCol.replace(/_/g, " ")} Share Breakdown`,
-      data: chartData,
-      xKey: "label",
-      yKey: "value",
-      xAxisLabel: genderCol.replace(/_/g, " "),
-      yAxisLabel: "Count Share",
-      analysis: {
-        whatItShows: `This donut chart illustrates the population proportion across ${genderCol.replace(/_/g, " ")} segments.`,
-        trend: `${topCat} represents the leading demographic segment at ${topPct}% of total volume.`,
-        keyStats: [
-          { label: "Primary Segment", value: `${topCat} (${topPct}%)` },
-          { label: "Categories", value: chartData.length.toString() },
-        ],
-        takeaway: `Maintain high availability for leading demographic segments while monitoring minor groups.`,
-      },
-    });
-  }
-
-  // CHART 3: Stroke / Target Rate by Hypertension (Cross-Tab Bar)
-  const strokeCol = binaryTargetColumns.find((c) => c.toLowerCase().includes("stroke") || c.toLowerCase().includes("churn")) || binaryTargetColumns[0];
-  const hyperCol = binaryTargetColumns.find((c) => c !== strokeCol && (c.toLowerCase().includes("hypertension") || c.toLowerCase().includes("heart"))) || categoricalColumns[0];
-  if (strokeCol && hyperCol) {
-    const groupTotal: Record<string, number> = {};
-    const groupPos: Record<string, number> = {};
-
-    data.forEach((r) => {
-      const rawVal = r[hyperCol];
-      const k = typeof rawVal === "number" ? (rawVal === 1 ? "Hypertension" : "Normal BP") : String(rawVal || "Other");
-      groupTotal[k] = (groupTotal[k] || 0) + 1;
-      if (Number(r[strokeCol]) === 1) {
-        groupPos[k] = (groupPos[k] || 0) + 1;
-      }
-    });
-
-    const chartData = Object.keys(groupTotal).map((k) => {
-      const tot = groupTotal[k] || 1;
-      const pos = groupPos[k] || 0;
-      return {
-        label: k,
-        value: Math.round((pos / tot) * 1000) / 10,
-        PositiveCount: pos,
-      };
-    });
-
-    charts.push({
-      id: "chart_stroke_hypertension",
-      type: "bar",
-      title: `${strokeCol.replace(/_/g, " ")} Rate by ${hyperCol.replace(/_/g, " ")}`,
-      data: chartData,
-      xKey: "label",
-      yKey: "value",
-      xAxisLabel: hyperCol.replace(/_/g, " "),
-      yAxisLabel: `${strokeCol.replace(/_/g, " ")} Rate (%)`,
-      analysis: {
-        whatItShows: `This chart cross-tabulates ${strokeCol.replace(/_/g, " ")} prevalence percentage across ${hyperCol.replace(/_/g, " ")} categories.`,
-        trend: `Subjects with elevated risk factors demonstrate a significantly higher rate of positive outcomes.`,
-        keyStats: [{ label: "Target Metric", value: strokeCol.replace(/_/g, " ") }],
-        takeaway: `Deploy proactive screening and early interventions for high-risk condition cohorts.`,
-      },
-    });
-  }
-
-  // CHART 4: Average Glucose Level Distribution (Area Chart)
-  const glucoseCol = nonAdditiveNumericColumns.find((c) => c.toLowerCase().includes("glucose") || c.toLowerCase().includes("bmi") || c.toLowerCase().includes("score")) || nonAdditiveNumericColumns[1];
-  if (glucoseCol) {
-    const glucoseBrackets = [
-      { label: "<80", min: 0, max: 79, value: 0 },
-      { label: "80-120", min: 80, max: 120, value: 0 },
-      { label: "121-160", min: 121, max: 160, value: 0 },
-      { label: "161-200", min: 161, max: 200, value: 0 },
-      { label: "200+", min: 201, max: 500, value: 0 },
-    ];
-
-    data.forEach((r) => {
-      const val = Number(r[glucoseCol]);
-      if (isNaN(val)) return;
-      const bracket = glucoseBrackets.find((b) => val >= b.min && val <= b.max);
-      if (bracket) bracket.value++;
-    });
-
-    const chartData = glucoseBrackets.map((b) => ({ label: b.label, value: b.value }));
-
-    charts.push({
-      id: "chart_glucose_area",
-      type: "area",
-      title: `${glucoseCol.replace(/_/g, " ")} Distribution Curve`,
-      data: chartData,
-      xKey: "label",
-      yKey: "value",
-      xAxisLabel: `${glucoseCol.replace(/_/g, " ")} Bracket`,
-      yAxisLabel: "Frequency Count",
-      analysis: {
-        whatItShows: `This area chart plots population density across ${glucoseCol.replace(/_/g, " ")} brackets (<80, 80-120, 121-160, 161-200, 200+).`,
-        trend: `Density peaks in normal brackets with a notable tail in elevated level categories.`,
-        keyStats: [{ label: "Tracked Attribute", value: glucoseCol.replace(/_/g, " ") }],
-        takeaway: `Monitor elevated concentration brackets to mitigate severe metabolic risk cases.`,
-      },
-    });
-  }
-
-  // CHART 5: Work Type / Segment Breakdown (Horizontal Bar)
-  const workCol = categoricalColumns.find((c) => c.toLowerCase().includes("work") || c.toLowerCase().includes("job") || c.toLowerCase().includes("channel") || c.toLowerCase().includes("dept")) || categoricalColumns[1];
-  if (workCol) {
-    const counts: Record<string, number> = {};
-    data.forEach((r) => {
-      const k = String(r[workCol] || "Other");
-      counts[k] = (counts[k] || 0) + 1;
-    });
-
-    const chartData = Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([k, v]) => ({
-        label: k,
-        value: v,
-      }));
-
-    charts.push({
-      id: "chart_work_type",
-      type: "bar",
-      title: `${workCol.replace(/_/g, " ")} Segment Breakdown`,
-      data: chartData,
-      xKey: "label",
-      yKey: "value",
-      xAxisLabel: workCol.replace(/_/g, " "),
-      yAxisLabel: "Count",
-      analysis: {
-        whatItShows: `This bar chart compares population volumes across ${workCol.replace(/_/g, " ")} categories.`,
-        trend: `Private and self-employed sectors comprise the overwhelming majority of participants.`,
-        keyStats: [{ label: "Leading Category", value: chartData[0] ? chartData[0].label : "N/A" }],
-        takeaway: `Align service capacity with leading workplace and occupational segments.`,
-      },
-    });
-  }
-
-  // CHART 6: Smoking Status vs Stroke Risk (Multi-Bar / Correlation)
-  const smokeCol = categoricalColumns.find((c) => c.toLowerCase().includes("smoke") || c.toLowerCase().includes("residence") || c.toLowerCase().includes("type")) || categoricalColumns[2];
-  if (smokeCol && strokeCol) {
-    const groupTotal: Record<string, number> = {};
-    const groupPos: Record<string, number> = {};
-
-    data.forEach((r) => {
-      const k = String(r[smokeCol] || "Unknown");
-      groupTotal[k] = (groupTotal[k] || 0) + 1;
-      if (Number(r[strokeCol]) === 1) {
-        groupPos[k] = (groupPos[k] || 0) + 1;
-      }
-    });
-
-    const chartData = Object.keys(groupTotal).map((k) => {
-      const tot = groupTotal[k] || 1;
-      const pos = groupPos[k] || 0;
-      return {
-        label: k,
-        value: Math.round((pos / tot) * 1000) / 10,
-      };
-    });
-
-    charts.push({
-      id: "chart_smoking_risk",
-      type: "bar",
-      title: `${strokeCol.replace(/_/g, " ")} Risk by ${smokeCol.replace(/_/g, " ")}`,
-      data: chartData,
-      xKey: "label",
-      yKey: "value",
-      xAxisLabel: smokeCol.replace(/_/g, " "),
-      yAxisLabel: `${strokeCol.replace(/_/g, " ")} Rate (%)`,
-      analysis: {
-        whatItShows: `This chart compares ${strokeCol.replace(/_/g, " ")} incidence rates across ${smokeCol.replace(/_/g, " ")} categories.`,
-        trend: `Active and former smokers demonstrate elevated incidence rates relative to non-smokers.`,
-        keyStats: [{ label: "Analyzed Metric", value: smokeCol.replace(/_/g, " ") }],
-        takeaway: `Integrate lifestyle counseling into primary healthcare prevention pathways.`,
-      },
-    });
-  }
-
-  // CHART 7: Pearson Correlation Scatter Plot
-  if (nonAdditiveNumericColumns.length >= 2) {
-    const col1 = nonAdditiveNumericColumns[0];
-    const col2 = nonAdditiveNumericColumns[1];
-
-    const chartData = data.slice(0, 20).map((r, idx) => ({
-      x: Number(r[col1]) || 0,
-      y: Number(r[col2]) || 0,
-      category: String(r[categoricalColumns[0]] || `Item ${idx + 1}`),
+  const p1Data = Object.entries(catSumMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([k, v]) => ({
+      label: k,
+      value: Math.round(v * 10) / 10,
     }));
 
+  charts.push({
+    id: "chart_p1_total_value",
+    type: "bar",
+    title: `TOTAL ${primaryNumCol.replace(/_/g, " ").toUpperCase()} BY ${primaryCatCol.replace(/_/g, " ").toUpperCase()}`,
+    data: p1Data,
+    xKey: "label",
+    yKey: "value",
+    xAxisLabel: primaryCatCol.replace(/_/g, " "),
+    yAxisLabel: `Total ${primaryNumCol.replace(/_/g, " ")} (${isCurrency ? "$" : "Units"})`,
+    analysis: {
+      whatItShows: `This bar chart aggregates total ${primaryNumCol.replace(/_/g, " ")} across ${primaryCatCol.replace(/_/g, " ")} segments.`,
+      trend: `${p1Data[0] ? p1Data[0].label : "Top segment"} leads overall output with $${p1Data[0] ? p1Data[0].value.toLocaleString() : 0}.`,
+      keyStats: [{ label: "Top Segment", value: `${p1Data[0] ? p1Data[0].label : "N/A"}` }],
+      takeaway: `Prioritize operational resource allocation toward leading revenue-generating segments.`,
+    },
+  });
+
+  // PERSPECTIVE 2 — Order Volume / Unit Share (Donut Chart with Structured Legend)
+  const p2Data = sortedCats.slice(0, 6).map(([k, v]) => ({
+    label: k,
+    name: k,
+    value: v,
+    pct: rowCount > 0 ? ((v / rowCount) * 100).toFixed(1) : "0",
+  }));
+
+  charts.push({
+    id: "chart_p2_volume_share",
+    type: "pie",
+    title: "TRANSACTION VOLUME SHARE",
+    data: p2Data,
+    xKey: "label",
+    yKey: "value",
+    xAxisLabel: primaryCatCol.replace(/_/g, " "),
+    yAxisLabel: "Volume Share",
+    analysis: {
+      whatItShows: `This donut chart illustrates transaction volume proportions across ${primaryCatCol.replace(/_/g, " ")} categories.`,
+      trend: `${p2Data[0] ? p2Data[0].label : "Primary cohort"} commands ${p2Data[0] ? p2Data[0].pct : 0}% of overall transactions.`,
+      keyStats: [{ label: "Leading Share", value: `${p2Data[0] ? p2Data[0].label : "N/A"} (${p2Data[0] ? p2Data[0].pct : 0}%)` }],
+      takeaway: `Maintain high inventory and service availability for top volume contributors.`,
+    },
+  });
+
+  // PERSPECTIVE 3 — Average Ticket Size / Mean Value (Bar Chart)
+  const catAvgMap: Record<string, { sum: number; count: number }> = {};
+  data.forEach((r) => {
+    const k = String(r[primaryCatCol] || "Other");
+    const v = Number(r[primaryNumCol]) || 0;
+    if (!catAvgMap[k]) catAvgMap[k] = { sum: 0, count: 0 };
+    catAvgMap[k].sum += v;
+    catAvgMap[k].count += 1;
+  });
+
+  const p3Data = Object.entries(catAvgMap)
+    .map(([k, stat]) => ({
+      label: k,
+      value: stat.count > 0 ? Math.round((stat.sum / stat.count) * 10) / 10 : 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+
+  charts.push({
+    id: "chart_p3_avg_ticket",
+    type: "bar",
+    title: `AVERAGE TICKET SIZE BY ${primaryCatCol.replace(/_/g, " ").toUpperCase()}`,
+    data: p3Data,
+    xKey: "label",
+    yKey: "value",
+    xAxisLabel: primaryCatCol.replace(/_/g, " "),
+    yAxisLabel: `Average ${primaryNumCol.replace(/_/g, " ")} (${isCurrency ? "$" : "Units"})`,
+    analysis: {
+      whatItShows: `This chart compares the average transaction value (ticket size) per ${primaryCatCol.replace(/_/g, " ")}.`,
+      trend: `${p3Data[0] ? p3Data[0].label : "Highest average"} yields the highest per-transaction yield at $${p3Data[0] ? p3Data[0].value : 0}.`,
+      keyStats: [{ label: "Peak Ticket Size", value: `$${p3Data[0] ? p3Data[0].value : 0}` }],
+      takeaway: `Cross-sell high-value accessories to elevate average order size across minor segments.`,
+    },
+  });
+
+  // PERSPECTIVE 4 — Transaction Ranking & Concentration (Horizontal / Ranked Bar)
+  const p4Data = data.slice(0, 8).map((r, idx) => ({
+    label: String(r[primaryCatCol] || `Item ${idx + 1}`),
+    value: Number(r[primaryNumCol]) || 0,
+  })).sort((a, b) => b.value - a.value);
+
+  charts.push({
+    id: "chart_p4_transaction_ranking",
+    type: "bar",
+    title: "TRANSACTION RANKING & CONCENTRATION",
+    data: p4Data,
+    xKey: "label",
+    yKey: "value",
+    xAxisLabel: "Entity / Record",
+    yAxisLabel: primaryNumCol.replace(/_/g, " "),
+    analysis: {
+      whatItShows: `This ranking plot displays top individual transaction amounts sorted by magnitude.`,
+      trend: `High-value single orders create prominent spike concentration points.`,
+      keyStats: [{ label: "Highest Single Order", value: `$${p4Data[0] ? p4Data[0].value : 0}` }],
+      takeaway: `Incentivize bulk purchasing tiers to capture high-value transaction orders.`,
+    },
+  });
+
+  // PERSPECTIVE 5 — Healthcare Target Crosstab or Secondary Distribution
+  if (binaryTargetColumns.length > 0) {
+    const targetCol = binaryTargetColumns[0];
+    const groupTotal: Record<string, number> = {};
+    const groupPos: Record<string, number> = {};
+
+    data.forEach((r) => {
+      const k = String(r[primaryCatCol] || "Other");
+      groupTotal[k] = (groupTotal[k] || 0) + 1;
+      if (Number(r[targetCol]) === 1) {
+        groupPos[k] = (groupPos[k] || 0) + 1;
+      }
+    });
+
+    const p5Data = Object.keys(groupTotal).slice(0, 6).map((k) => {
+      const tot = groupTotal[k] || 1;
+      const pos = groupPos[k] || 0;
+      return {
+        label: k,
+        value: Math.round((pos / tot) * 1000) / 10,
+      };
+    });
+
     charts.push({
-      id: "chart_scatter_correlation",
-      type: "scatter",
-      title: `${col2.replace(/_/g, " ")} vs ${col1.replace(/_/g, " ")} Correlation`,
-      data: chartData,
-      xKey: "x",
-      yKey: "y",
-      xAxisLabel: col1.replace(/_/g, " "),
-      yAxisLabel: col2.replace(/_/g, " "),
+      id: "chart_p5_target_crosstab",
+      type: "bar",
+      title: `${targetCol.replace(/_/g, " ").toUpperCase()} RISK BY ${primaryCatCol.replace(/_/g, " ").toUpperCase()}`,
+      data: p5Data,
+      xKey: "label",
+      yKey: "value",
+      xAxisLabel: primaryCatCol.replace(/_/g, " "),
+      yAxisLabel: `${targetCol.replace(/_/g, " ")} Rate (%)`,
       analysis: {
-        whatItShows: `This scatter plot maps the continuous correlation between ${col1.replace(/_/g, " ")} and ${col2.replace(/_/g, " ")}.`,
-        trend: `Data points exhibit clear positive covariance across measured participants.`,
-        keyStats: [
-          { label: "Axis X", value: col1.replace(/_/g, " ") },
-          { label: "Axis Y", value: col2.replace(/_/g, " ") },
-        ],
-        takeaway: `Monitor co-dependent measures to forecast multi-metric operational shifts.`,
+        whatItShows: `This cross-tabulation maps positive ${targetCol.replace(/_/g, " ")} rates across ${primaryCatCol.replace(/_/g, " ")} cohorts.`,
+        trend: `Target prevalence varies noticeably across distinct demographic groups.`,
+        keyStats: [{ label: "Target Metric", value: targetCol.replace(/_/g, " ") }],
+        takeaway: `Deploy proactive screening and early intervention programs for high-risk cohorts.`,
       },
     });
   }
 
-  // CHART 8: Highlights Card Summary
-  const highlightsItems = [];
-  if (nonAdditiveNumericColumns.length > 0) {
-    const col = nonAdditiveNumericColumns[0];
-    const vals = data.map((r) => Number(r[col])).filter((v) => !isNaN(v)).sort((a, b) => a - b);
-    if (vals.length > 0) {
-      const p90 = vals[Math.floor(vals.length * 0.9)] || vals[vals.length - 1];
-      highlightsItems.push({
-        label: `90th Percentile ${col.replace(/_/g, " ")}`,
-        value: `${p90.toFixed(1)}`,
-        subtext: "Top 10% threshold",
-      });
-    }
-  }
-
-  if (binaryTargetColumns.length > 0) {
-    const col = binaryTargetColumns[0];
-    const pos = data.filter((r) => Number(r[col]) === 1).length;
-    highlightsItems.push({
-      label: `Total Positive ${col.replace(/_/g, " ")} Cases`,
-      value: pos.toLocaleString(),
-      subtext: `${((pos / rowCount) * 100).toFixed(1)}% of cohort`,
-    });
-  }
-
-  if (categoricalColumns.length > 0) {
-    const col = categoricalColumns[0];
-    const counts: Record<string, number> = {};
-    data.forEach((r) => {
-      const k = String(r[col] || "Other");
-      counts[k] = (counts[k] || 0) + 1;
-    });
-    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    if (sorted[0]) {
-      highlightsItems.push({
-        label: `Primary ${col.replace(/_/g, " ")} Group`,
-        value: sorted[0][0],
-        subtext: `${sorted[0][1].toLocaleString()} occurrences`,
-      });
-    }
-  }
-
-  highlightsItems.push({
-    label: "Data Parsing Status",
-    value: "[Complete]",
-    subtext: "0 schema anomalies",
-  });
+  // 3. HIGHLIGHTS SUMMARY CARD
+  const highlightsItems = [
+    {
+      label: `Total Revenue / Sum`,
+      value: isCurrency ? `$${totalNum.toLocaleString()}` : totalNum.toLocaleString(),
+      subtext: `${rowCount} total transactions`,
+    },
+    {
+      label: `Primary Segment`,
+      value: p1Data[0] ? p1Data[0].label : "N/A",
+      subtext: `${p2Data[0] ? p2Data[0].pct : 0}% of overall volume`,
+    },
+    {
+      label: `Average Order Value`,
+      value: isCurrency ? `$${avgNum.toFixed(1)}` : avgNum.toFixed(1),
+      subtext: `Across all categories`,
+    },
+    {
+      label: "Parsing Status",
+      value: "[Complete]",
+      subtext: "0 schema anomalies",
+    },
+  ];
 
   const highlightsCard: HighlightsCardData = {
     title: "Top Highlights & Cohort Summary",
     items: highlightsItems,
   };
 
+  const suggestions = generateDatasetSuggestions(columns, data);
+
   return {
-    kpis: kpis.slice(0, 6),
+    kpis: kpis.slice(0, 4),
     charts,
     heroChart: charts[0] || null,
     segmentChart: charts[1] || null,
@@ -579,6 +449,7 @@ export function generateInitialDashboard(parsed: ParsedCsvResult): DashboardStat
     highlightsCard,
     tableData: data,
     columns,
+    suggestions,
   };
 }
 

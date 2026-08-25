@@ -63,6 +63,7 @@ export interface DashboardState {
   highlightsCard?: HighlightsCardData | null;
   tableData: Record<string, any>[];
   columns: string[];
+  suggestions?: string[];
 }
 
 export interface ChatMessage {

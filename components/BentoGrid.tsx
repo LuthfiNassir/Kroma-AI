@@ -27,23 +27,18 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
 
   return (
     <div className="w-full space-y-4">
-      {/* 1. TOP EXECUTIVE KPI ROW (Dynamic Grid 4 to 6 Cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-        {kpis.map((kpi, idx) => (
-          <MetricCard key={idx} data={kpi} />
+      {/* 1. TOP EXECUTIVE KPI ROW (Responsive 4-Card Grid in Split View) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {kpis.slice(0, 4).map((kpi, idx) => (
+          <div key={idx} className="min-w-0">
+            <MetricCard data={kpi} />
+          </div>
         ))}
       </div>
 
       {/* 2. AUTONOMOUS DYNAMIC BENTO GRID (12-Column Responsive Layout) */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         {charts.map((chartWidget, idx) => {
-          // Dynamic Column Span Mapping as specified:
-          // Chart 1 (Age Distribution): md:col-span-8
-          // Chart 2 (Gender Donut): md:col-span-4
-          // Chart 3 (Stroke Rate): md:col-span-6
-          // Chart 4 (Glucose Distribution): md:col-span-6
-          // Chart 5 (Work Type): md:col-span-6
-          // Chart 6 (Smoking Risk): md:col-span-6
           let colSpanClass = "md:col-span-6";
 
           if (idx === 0) {
