@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { X, Sparkles, BarChart2, CheckCircle2, Info, Lightbulb, TrendingUp } from "lucide-react";
+import { X, Sparkles, BarChart2, CheckCircle2, Info, Lightbulb, TrendingUp, ChevronDown, ChevronRight, Cpu } from "lucide-react";
 import { ChartDataSeries } from "@/lib/types";
 import { ChartCard } from "./ChartCard";
 import {
@@ -20,6 +20,7 @@ interface ChartModalProps {
 
 export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
   const shouldReduceMotion = useReducedMotion();
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
   // Close on Escape key
   useEffect(() => {
@@ -43,6 +44,8 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
     analysis?.trend || "Values reflect relative distribution across compared categories.",
     `Total records analyzed: ${chart?.data?.length || 0} discrete points.`,
   ];
+
+  const technicalDetails = analysis?.technicalDetails || [];
 
   return (
     <AnimatePresence>
@@ -96,7 +99,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
 
             {/* Modal Body: Two-Column Layout */}
             <div className="flex-1 min-h-0 pt-4 grid grid-cols-1 lg:grid-cols-12 gap-5 overflow-hidden">
-              {/* Left Pane (58-60% width): Fixed Stationary Chart Canvas */}
+              {/* Left Pane: Fixed Stationary Chart Canvas (Does NOT scroll) */}
               <div className="lg:col-span-7 h-full min-h-0 rounded-2xl bg-[#212222] border border-white/10 p-4 flex flex-col justify-between shadow-inner overflow-hidden">
                 <div className="flex items-center justify-between mb-2 shrink-0">
                   <span className="text-xs font-mono font-semibold text-white/60 uppercase tracking-wider">
@@ -115,7 +118,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                 </div>
               </div>
 
-              {/* Right Pane (40-42% width): Independently Scrollable Analysis Column */}
+              {/* Right Pane: Independently Scrollable Analysis Column */}
               <motion.div
                 variants={staggerContainer(0.04, 0.05)}
                 initial={shouldReduceMotion ? undefined : "hidden"}
@@ -143,7 +146,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                   <div className="bg-[#FE6749]/10 border border-[#FE6749]/25 p-3.5 rounded-2xl text-xs text-white/95 font-medium leading-relaxed">
                     {analysis?.mainFinding ||
                       analysis?.trend ||
-                      "The data reveals noticeable differences between the leading and secondary categories in this comparison."}
+                      "The data reveals noticeable patterns and directions across the observations."}
                   </div>
                 </motion.div>
 
@@ -214,7 +217,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                   </div>
                   <p className="text-xs text-white/85 leading-relaxed bg-white/[0.02] p-3 rounded-xl border border-white/5">
                     {analysis?.whyItMatters ||
-                      "Comparing these metrics provides context on how values are distributed, highlighting where the largest share of activity occurs."}
+                      "Contextualizing these numbers provides clear decision-ready signals without requiring manual statistical recalculations."}
                   </p>
                 </motion.div>
 
@@ -231,9 +234,41 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                   </div>
                   <p className="text-xs text-white/95 leading-relaxed font-sans font-medium">
                     {analysis?.takeaway ||
-                      "Review the top performing groups to understand what factors drive their lead over other categories."}
+                      "Use these findings to inform operational priorities and forward projections."}
                   </p>
                 </motion.div>
+
+                {/* 7. Collapsible Technical Details (For Analysts) */}
+                {technicalDetails.length > 0 && (
+                  <motion.div variants={modalSectionReveal} className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+                      className="w-full flex items-center justify-between p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 font-mono text-xs text-white/60 transition cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Cpu className="w-3.5 h-3.5 text-[#FE6749]" />
+                        <span>[Technical Details]</span>
+                      </div>
+                      {showTechnicalDetails ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-white/40" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-white/40" />
+                      )}
+                    </button>
+
+                    {showTechnicalDetails && (
+                      <div className="mt-2 p-3 rounded-xl bg-black/40 border border-white/5 space-y-2 font-mono text-[11px]">
+                        {technicalDetails.map((tech, tIdx) => (
+                          <div key={tIdx} className="flex items-center justify-between border-b border-white/5 pb-1">
+                            <span className="text-white/40">{tech.label}:</span>
+                            <span className="text-white/80 font-bold">{tech.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
               </motion.div>
             </div>
           </motion.div>

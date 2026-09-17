@@ -1,4 +1,4 @@
-export type ChartType =
+﻿export type ChartType =
   | "bar"
   | "line"
   | "pie"
@@ -61,10 +61,13 @@ export interface TemporalIntelligence {
   dateColumn?: string;
   startDate?: string;
   endDate?: string;
+  startLabel?: string;
+  endLabel?: string;
   observationCount: number;
   frequency?: "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular";
   isContinuous: boolean;
   continuityScore: number;
+  orderedLabels?: string[];
 }
 
 export interface DataQualityIntelligence {
@@ -133,6 +136,52 @@ export interface DatasetSummaryNarrative {
   dashboardRationale: string;
 }
 
+export interface PeriodChange {
+  period: string;
+  previousPeriod: string;
+  previousValue: number;
+  currentValue: number;
+  change: number;
+  pctChange: number;
+}
+
+export interface GrowthIntelligence {
+  targetMetric: string;
+  startPeriod: string;
+  endPeriod: string;
+  startValue: number;
+  endValue: number;
+  totalChange: number;
+  totalGrowthPct: number;
+  averagePeriodicGrowthPct: number;
+  periodChanges: PeriodChange[];
+  largestIncrease: PeriodChange | null;
+  largestDecline: PeriodChange | null;
+  recentDirection: "increasing" | "decreasing" | "flat";
+}
+
+export interface ForecastPoint {
+  period: string;
+  displayLabel: string;
+  forecastValue: number;
+  lowerBound?: number;
+  upperBound?: number;
+}
+
+export interface ForecastResult {
+  targetMetric: string;
+  historicalSeries: { period: string; displayLabel: string; value: number }[];
+  forecastSeries: ForecastPoint[];
+  horizon: number;
+  method: string;
+  trendDirection: "increasing" | "decreasing" | "flat";
+  baseline: number;
+  projectedGrowthPct: number;
+  confidenceLevel: string;
+  limitations: string;
+  explanation: string;
+}
+
 export interface DatasetIntelligenceProfile {
   datasetSummary: {
     rowCount: number;
@@ -151,6 +200,8 @@ export interface DatasetIntelligenceProfile {
   dataQuality: DataQualityIntelligence;
   capabilities: AnalyticalCapabilities;
   archetype: ArchetypeIntelligence;
+  growth?: GrowthIntelligence;
+  forecast?: ForecastResult;
 }
 
 export interface KPICardData {
@@ -164,6 +215,11 @@ export interface KeyStat {
   value: string;
 }
 
+export interface TechnicalDetailItem {
+  label: string;
+  value: string;
+}
+
 export interface ChartAnalysis {
   whatItShows: string;
   mainFinding?: string;
@@ -172,6 +228,7 @@ export interface ChartAnalysis {
   keyStats: KeyStat[];
   takeaway: string;
   trend?: string;
+  technicalDetails?: TechnicalDetailItem[];
 }
 
 export interface ChartDataSeries {
@@ -185,6 +242,7 @@ export interface ChartDataSeries {
   xKey?: string;
   yKey?: string;
   analysis?: ChartAnalysis;
+  isForecastChart?: boolean;
 }
 
 export interface HighlightItem {
@@ -204,6 +262,11 @@ export type ActionType =
   | "REFRESH_DASHBOARD"
   | "REBUILD_DASHBOARD"
   | "FORECAST"
+  | "SHOW_FORECAST"
+  | "SHOW_TREND"
+  | "SHOW_SOURCE_DATA"
+  | "FOCUS_ANALYSIS"
+  | "NEW_ANALYSIS"
   | "ANALYZE_RELATIONSHIP";
 
 export interface StructuredAIAction {
@@ -214,7 +277,7 @@ export interface StructuredAIAction {
   targetDimension?: string;
 }
 
-export type DatasetSourceType = "csv" | "pasted";
+export type DatasetSourceType = "csv" | "pasted" | "prompt_only";
 
 export interface DashboardState {
   profileType: DatasetArchetype;
@@ -227,11 +290,14 @@ export interface DashboardState {
   heroChart?: ChartDataSeries | null;
   segmentChart?: ChartDataSeries | null;
   correlationChart?: ChartDataSeries | null;
+  forecastChart?: ChartDataSeries | null;
   highlightsCard?: HighlightsCardData | null;
   tableData: Record<string, any>[];
   columns: string[];
   suggestions?: string[];
   projectionData?: Record<string, any>[];
+  forecastResult?: ForecastResult | null;
+  growthIntelligence?: GrowthIntelligence | null;
   forecastingSupported?: boolean;
   forecastReason?: string;
   whatIfParams?: {

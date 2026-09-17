@@ -1,4 +1,4 @@
-import {
+﻿import {
   AnalyticalCapabilities,
   ColumnIntelligence,
   DetectedRelationship,
@@ -18,7 +18,7 @@ interface CapabilityInput {
 export function detectAnalyticalCapabilities(input: CapabilityInput): AnalyticalCapabilities {
   const { columns, temporal, measures, dimensions, targets, relationships, rowCount } = input;
 
-  // 1. Time-Series Forecasting (Strictly Conditional)
+  // 1. Time-Series Forecasting (Strictly Conditional on Real Time History)
   const canForecast =
     temporal.hasTemporal &&
     temporal.observationCount >= 6 &&
@@ -26,66 +26,66 @@ export function detectAnalyticalCapabilities(input: CapabilityInput): Analytical
     measures.length > 0;
 
   const forecastReason = !temporal.hasTemporal
-    ? "No temporal dimension detected in dataset."
+    ? "This dataset does not contain a time dimension, so a time-based forecast is not appropriate."
     : temporal.observationCount < 6
-    ? `Insufficient historical observations (${temporal.observationCount} records; minimum 6 required).`
+    ? `This dataset does not contain enough consistent history to produce a dependable forecast (${temporal.observationCount} periods; at least 6 required).`
     : !temporal.isContinuous
-    ? `Temporal continuity gaps detected (${temporal.frequency} intervals with irregular timestamps).`
+    ? "Time periods contain gaps or irregular intervals that prevent a reliable forward projection."
     : measures.length === 0
-    ? "No continuous numeric measures available to project."
-    : `${temporal.observationCount} ${temporal.frequency} observations detected with high temporal continuity (${(temporal.continuityScore * 100).toFixed(0)}%).`;
+    ? "No numeric measures available to project."
+    : `6-month deterministic projection supported across ${temporal.observationCount} ${temporal.frequency} periods.`;
 
   // 2. Trend Analysis
   const canTrend = temporal.hasTemporal && temporal.observationCount >= 3 && measures.length > 0;
   const trendReason = canTrend
-    ? `Sequential tracking supported across ${temporal.observationCount} temporal points.`
-    : "Requires a temporal dimension paired with numeric measures.";
+    ? `Sequential tracking supported across ${temporal.observationCount} periods.`
+    : "Requires a time dimension paired with numeric measures.";
 
   // 3. Target Outcome Prediction
   const canPredict = targets.length > 0 && (measures.length > 0 || dimensions.length > 0);
   const predictReason = canPredict
-    ? `Target outcome flag [${targets.join(", ")}] identified with ${measures.length + dimensions.length} explanatory feature attributes.`
+    ? `Target outcome [${targets.join(", ")}] identified with supporting attributes.`
     : "No binary target or discrete outcome variable detected in schema.";
 
-  // 4. Numeric Correlation Analysis
+  // 4. Numeric Correlation / Relationship Analysis
   const canCorrelate = measures.length >= 2 && rowCount >= 5;
   const corrReason = canCorrelate
-    ? `Multi-measure correlation engine enabled across ${measures.length} continuous metrics.`
-    : "Requires at least 2 distinct continuous numeric metrics with sufficient variance.";
+    ? `Relationship analysis enabled across ${measures.length} numeric measures.`
+    : "Requires at least 2 distinct numeric measures with enough records to compare.";
 
-  // 5. Cohort Analysis & Segmentation
+  // 5. Cohort Analysis & Segmentation (STRICT: Dimensions MUST Exist)
   const canCohort = dimensions.length >= 1 && (measures.length >= 1 || targets.length >= 1);
   const cohortReason = canCohort
-    ? `Comparative cohort grouping enabled across ${dimensions.length} discrete categorical dimensions.`
-    : "Requires at least one low-to-medium cardinality categorical dimension.";
+    ? `Group comparisons enabled across ${dimensions.length} categories.`
+    : "No categorical groupings exist in this dataset.";
 
   // 6. Funnel / Operational Process Flow
   const workflowCols = columns.filter((c) => {
     const n = c.name.toLowerCase();
-    return n.includes("stage") || n.includes("status") || n.includes("step") || n.includes("phase") || n.includes("state");
+    return n.includes("stage") || n.includes("status") || n.includes("step") || n.includes("phase");
   });
   const canFunnel = workflowCols.length >= 1 && (dimensions.length >= 1 || measures.length >= 1);
   const funnelReason = canFunnel
-    ? `Operational pipeline progression detected via [${workflowCols.map((c) => c.name).join(", ")}].`
-    : "No multi-stage operational lifecycle or status workflow attributes found.";
+    ? `Process progression detected via [${workflowCols.map((c) => c.name).join(", ")}].`
+    : "No multi-stage workflow or status attributes found.";
 
   // 7. Segmentation Analysis
   const canSegment = dimensions.length >= 1;
   const segmentReason = canSegment
-    ? `${dimensions.length} categorical dimensions available for population stratification.`
-    : "No distinct categorical segmentation dimensions found.";
+    ? `${dimensions.length} categories available for comparison.`
+    : "No categorical grouping columns exist in this dataset.";
 
-  // 8. Distribution & Quartile Analysis
-  const canDistribute = measures.length >= 1 && rowCount >= 10;
+  // 8. Distribution & Spread Analysis
+  const canDistribute = measures.length >= 1 && rowCount >= 8;
   const distReason = canDistribute
-    ? `Statistical spread and quartile distributions calculable across ${measures.length} continuous metrics.`
-    : "Requires continuous numeric attributes with at least 10 records.";
+    ? `Number spread calculable across ${measures.length} measures.`
+    : "Requires numeric attributes with at least 8 records.";
 
   // 9. Anomaly & Outlier Detection
-  const canOutlier = measures.length >= 1 && rowCount >= 15;
+  const canOutlier = measures.length >= 1 && rowCount >= 10;
   const outlierReason = canOutlier
-    ? `Interquartile range (IQR) and standard deviation thresholding active for outlier isolation.`
-    : "Requires at least 15 numeric records for reliable statistical thresholding.";
+    ? `Pattern tracking and sudden shift detection active.`
+    : "Requires at least 10 records for reliable pattern detection.";
 
   return {
     timeSeriesForecasting: {

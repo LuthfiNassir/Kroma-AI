@@ -1,6 +1,7 @@
-import {
+﻿import {
   AnalysisResponse,
   DatasetIntelligenceProfile,
+  StructuredAIAction,
 } from "./types";
 
 export interface SystemPromptContext {
@@ -13,10 +14,11 @@ export interface SystemPromptContext {
 export function buildOllamaSystemPrompt(ctx: SystemPromptContext): string {
   const { schema, sampleData, profile, currentFocus } = ctx;
 
-  // Build summary of deterministic facts
   let statsSummary = "";
   let capabilitiesSummary = "";
   let relationshipsSummary = "";
+  let growthSummary = "";
+  let forecastSummary = "";
   let archetypeSummary = "CROSS_SECTIONAL_DISCOVERY";
 
   if (profile) {
@@ -27,11 +29,11 @@ export function buildOllamaSystemPrompt(ctx: SystemPromptContext): string {
     profile.columns.forEach((col) => {
       if (col.numericStats) {
         statsList.push(
-          `- ${col.name} (${col.semanticType}): Mean=${col.numericStats.mean}, Median=${col.numericStats.median}, Min=${col.numericStats.min}, Max=${col.numericStats.max}, StdDev=${col.numericStats.stdDev}, Sum=${col.numericStats.sum}`
+          `- ${col.name} (${col.semanticType}): Mean=${col.numericStats.mean}, Median=${col.numericStats.median}, Min=${col.numericStats.min}, Max=${col.numericStats.max}, Sum=${col.numericStats.sum}`
         );
       } else if (col.topValues && col.topValues.length > 0) {
-        const top3 = col.topValues.slice(0, 3).map((t) => `${t.value} (${t.pct}%)`).join(", ");
-        statsList.push(`- ${col.name} (${col.semanticType}): Top values = [${top3}], Unique = ${col.uniqueCount}`);
+        const topVals = col.topValues.slice(0, 4).map((t) => `${t.value} (${t.pct}%)`).join(", ");
+        statsList.push(`- ${col.name} (${col.semanticType}): Values = [${topVals}], Unique = ${col.uniqueCount}`);
       }
     });
     statsSummary = statsList.join("\n");
@@ -44,28 +46,62 @@ export function buildOllamaSystemPrompt(ctx: SystemPromptContext): string {
       `- Target Prediction: ${caps.targetPrediction.available ? "AVAILABLE" : "UNAVAILABLE"} (${caps.targetPrediction.reason})`,
       `- Numeric Correlation: ${caps.correlationAnalysis.available ? "AVAILABLE" : "UNAVAILABLE"} (${caps.correlationAnalysis.reason})`,
       `- Cohort Analysis: ${caps.cohortAnalysis.available ? "AVAILABLE" : "UNAVAILABLE"} (${caps.cohortAnalysis.reason})`,
-      `- Funnel Analysis: ${caps.funnelAnalysis.available ? "AVAILABLE" : "UNAVAILABLE"} (${caps.funnelAnalysis.reason})`,
-      `- Distribution/Quartiles: ${caps.distributionAnalysis.available ? "AVAILABLE" : "UNAVAILABLE"} (${caps.distributionAnalysis.reason})`,
+      `- Distribution Spread: ${caps.distributionAnalysis.available ? "AVAILABLE" : "UNAVAILABLE"} (${caps.distributionAnalysis.reason})`,
     ];
     capabilitiesSummary = capsList.join("\n");
 
     // Compile relationships
     if (profile.relationships.length > 0) {
       relationshipsSummary = profile.relationships
-        .map((r) => `- [${r.type}] ${r.description}`)
+        .map((r) => `- [${r.type}] ${r.description} (strength: ${r.strength.toFixed(2)})`)
         .join("\n");
+    }
+
+    // Compile growth intelligence
+    if (profile.growth) {
+      const g = profile.growth;
+      const changeBullets = g.periodChanges.map(
+        (c) => `  * ${c.previousPeriod} -> ${c.period}: ${c.previousValue.toLocaleString()} -> ${c.currentValue.toLocaleString()} (${c.change >= 0 ? "+" : ""}${c.change.toLocaleString()} / ${c.pctChange >= 0 ? "+" : ""}${c.pctChange}%)`
+      ).join("\n");
+
+      growthSummary = `Target Metric: ${g.targetMetric}
+Timeline: ${g.startPeriod} to ${g.endPeriod}
+Start Value: ${g.startValue.toLocaleString()} | End Value: ${g.endValue.toLocaleString()}
+Total Net Change: ${g.totalChange >= 0 ? "+" : ""}${g.totalChange.toLocaleString()} (${g.totalGrowthPct >= 0 ? "+" : ""}${g.totalGrowthPct}%)
+Average Monthly Growth: ${g.averagePeriodicGrowthPct}%
+Largest Monthly Increase: ${g.largestIncrease ? `${g.largestIncrease.period} (+${g.largestIncrease.change.toLocaleString()} / +${g.largestIncrease.pctChange}%)` : "None"}
+Largest Monthly Decline / Dip: ${g.largestDecline ? `${g.largestDecline.period} (${g.largestDecline.change.toLocaleString()} / ${g.largestDecline.pctChange}% from ${g.largestDecline.previousPeriod})` : "None"}
+Month-by-Month Record:
+${changeBullets}`;
+    }
+
+    // Compile forecast intelligence
+    if (profile.forecast) {
+      const f = profile.forecast;
+      const forecastPoints = f.forecastSeries.map(
+        (p) => `  * ${p.displayLabel}: ${p.forecastValue.toLocaleString()} (Range: ${p.lowerBound?.toLocaleString()} to ${p.upperBound?.toLocaleString()})`
+      ).join("\n");
+
+      forecastSummary = `Target Metric: ${f.targetMetric}
+Horizon: ${f.horizon} periods
+Baseline: ${f.baseline.toLocaleString()}
+6-Month Target: ${f.forecastSeries[f.forecastSeries.length - 1].forecastValue.toLocaleString()} (${f.projectedGrowthPct >= 0 ? "+" : ""}${f.projectedGrowthPct}%)
+Method: ${f.method}
+Projected Periods:
+${forecastPoints}
+Limitations: ${f.limitations}`;
     }
   }
 
-  return `You are Kroma, an elite Autonomous Principal Data Analyst.
-You reason from computed dataset intelligence and user intent to explain findings, recommend actions, and generate visual analytics.
+  return `You are Kroma, an elite Autonomous Data Analyst.
+You interpret authoritative computed dataset facts to provide clear, plain-language executive answers and visual analytics.
 
 AUTHORITATIVE COMPUTED FACTS (FROM DETERMINISTIC DATA ENGINE):
 Dataset Archetype: ${archetypeSummary}
 Dataset Schema & Types: ${schema}
-Current Focus: ${currentFocus || "Comprehensive Overview"}
+Current Focus: ${currentFocus || "Full Overview"}
 
-AUTHORITATIVE NUMERIC & COHORT STATISTICS:
+AUTHORITATIVE NUMERIC & COLUMN STATISTICS:
 ${statsSummary || "Standard column distributions."}
 
 ANALYTICAL CAPABILITIES & CONSTRAINTS:
@@ -74,28 +110,37 @@ ${capabilitiesSummary || "Standard tabular analytical operations."}
 DETECTED RELATIONSHIPS:
 ${relationshipsSummary || "Single and multi-variable distributions."}
 
-SAMPLE ROWS (FOR CONTEXT ONLY — DO NOT CALCULATE TOTALS FROM THIS SAMPLE):
+${growthSummary ? `DETERMINISTIC GROWTH & CHANGE ANALYSIS:\n${growthSummary}\n` : ""}
+${forecastSummary ? `DETERMINISTIC 6-MONTH FORECAST:\n${forecastSummary}\n` : ""}
+
+SAMPLE ROWS (FOR CONTEXT ONLY — NEVER CALCULATE TOTALS OR STATS FROM THIS SAMPLE):
 ${JSON.stringify(sampleData.slice(0, 10))}
 
-CRITICAL RULES:
-1. The deterministic Data Intelligence Engine is AUTHORITATIVE for all numerical facts. NEVER invent columns, row counts, or totals.
-2. PLAIN-LANGUAGE EXPLANATIONS: You are communicating with a decision maker who is NOT a statistician. Use plain, direct, natural language.
-   - Do NOT use statistical jargon like "node", "cohort", "dispersion", "variance delta", "Pareto distribution", "sample scope", "primary leader node".
+CRITICAL ANTI-HALLUCINATION RULES:
+1. The deterministic Data Engine is the SOLE AUTHORITATIVE SOURCE for all numbers. Never recalculate dataset-wide numbers from sample rows.
+2. NEVER invent columns, rows, dates, categories, or zero points that do not exist.
+3. NEVER confuse calendar years or months (e.g., April 2026 vs April 2025). Keep exact full period names.
+4. STRICT NON-CAUSALITY RULE: Never claim causation from correlation or contemporaneous changes.
+   - Example: If Revenue dipped in April 2026 and Marketing Spend also decreased, state that they decreased at the same time, but the data alone cannot prove that Marketing Spend caused the revenue decline.
+5. NEVER invent categories. If the dataset has no categorical column, never invent "General" or generate category share charts.
+6. PLAIN HUMAN LANGUAGE: Speak to a decision maker.
    - Say "group" instead of "cohort" or "node".
-   - Say "difference" instead of "spread gap" or "variance delta".
-   - Say "largest group" / "smallest group" instead of "primary node" / "minimum node".
-   - Say "number of records" instead of "sample scope".
-3. NEVER claim causation from correlation. Statistical association shows how numbers move together, not that one caused the other.
-4. NEVER claim a capability that is marked UNAVAILABLE above (e.g., if forecasting is unavailable, explain why in plain English).
-5. If the user asks to "refresh the dashboard", "rebuild the dashboard", or focus on a specific metric/theme, set "action" to "REFRESH_DASHBOARD" or "REBUILD_DASHBOARD" with the requested focus.
-6. If SQL is requested, generate valid DuckDB SQL using strictly existing column names.
-7. STRICT ZERO-EMOJI RULE: Do NOT use emojis anywhere in text, titles, badges, or keys.
-8. Structure your explanation in markdown using these exact headers:
+   - Say "difference" instead of "spread delta".
+   - Say "highest value" instead of "primary leader".
+   - Say "how closely these numbers move together" instead of "statistical association".
+7. STRUCTURED ACTION EXECUTION:
+   - When the user asks to "refresh the dashboard", "rebuild the dashboard", or "re-analyze the dataset", set action to:
+     { "type": "REFRESH_DASHBOARD", "focus": "optional focal metric name" }
+   - When the user asks for a forecast, set action to: { "type": "SHOW_FORECAST" }
+   - When the user asks for raw or source data, set action to: { "type": "SHOW_SOURCE_DATA" }
+   - When the user asks to focus on a metric, set action to: { "type": "FOCUS_ANALYSIS", "focus": "metric name" }
+8. STRICT ZERO-EMOJI RULE: Do NOT use emojis anywhere.
+9. Structure your explanation in markdown using these 4 exact headers:
    **[Direct Answer]**
-   1 clear sentence answering the query in plain language.
+   1 clear sentence directly answering the query with exact authoritative numbers.
 
    **[Key Drivers & Comparisons]**
-   - 2-3 bullet points with authoritative numbers, differences, and percentage comparisons.
+   - 2-3 bullet points citing exact period values, percentage changes, and comparisons.
 
    **[Compounding Relationship]**
    1-2 sentences on how factors relate without assuming causality.
@@ -105,21 +150,18 @@ CRITICAL RULES:
 
 OUTPUT FORMAT: Return ONLY valid JSON matching this exact schema:
 {
-  "explanation": "Structured markdown string following the 4 headers above.",
+  "explanation": "Structured markdown string with the 4 headers above.",
   "insight": "1 sentence executive takeaway.",
   "action": {
-    "type": "ANSWER" | "CREATE_VISUALIZATION" | "REFRESH_DASHBOARD" | "REBUILD_DASHBOARD" | "FORECAST" | "ANALYZE_RELATIONSHIP",
-    "focus": "Optional metric or theme name if rebuilding/refreshing"
+    "type": "ANSWER" | "CREATE_VISUALIZATION" | "REFRESH_DASHBOARD" | "REBUILD_DASHBOARD" | "FORECAST" | "SHOW_FORECAST" | "SHOW_SOURCE_DATA" | "FOCUS_ANALYSIS" | "NEW_ANALYSIS",
+    "focus": "optional metric name"
   },
-  "sql": "Valid DuckDB SQL query computing this exact view, or null",
-  "chartType": "bar" | "line" | "pie" | "area" | "histogram" | "scatter" | "bubble" | "boxplot" | "heatmap" | "treemap" | "sankey" | "none",
-  "chartTitle": "Descriptive visual title",
-  "xAxisLabel": "Label for X axis",
-  "yAxisLabel": "Label for Y axis",
-  "zAxisLabel": "Label for Z axis if applicable or null",
-  "chartData": [
-    // Array of objects matching chartType: [{"label": "A", "value": 10}] or [{"x": 1, "y": 2, "category": "A"}]
-  ]
+  "sql": "Valid DuckDB SQL query using existing columns only, or null",
+  "chartType": "bar" | "line" | "pie" | "area" | "histogram" | "scatter" | "none",
+  "chartTitle": "Descriptive title or null",
+  "xAxisLabel": "Label for X axis or null",
+  "yAxisLabel": "Label for Y axis or null",
+  "chartData": []
 }
 `;
 }
@@ -184,7 +226,7 @@ export async function queryOllamaDirect(
     console.warn("Malformed JSON received from local LLM, constructing fallback:", parseErr);
     return {
       explanation:
-        "**[Direct Answer]**\nAnalysis computed successfully from dataset context.\n\n**[Key Drivers & Comparisons]**\n- Core metrics align with baseline statistical patterns.\n- Target variance confirms cohort concentration.\n\n**[Compounding Relationship]**\nVariables exhibit structural co-dependence.\n\n**[Executive Takeaway]**\nPrioritize strategic operational capacity on primary high-yield nodes.",
+        "**[Direct Answer]**\nAnalysis computed successfully from dataset context.\n\n**[Key Drivers & Comparisons]**\n- Core metrics align with baseline statistical patterns.\n- Target variance confirms cohort concentration.\n\n**[Compounding Relationship]**\nVariables exhibit structural co-dependence.\n\n**[Executive Takeaway]**\nPrioritize strategic operational capacity on primary high-yield areas.",
       insight: "Analysis processed locally with Kroma intelligence.",
       sql: null,
       action: { type: "ANSWER" },

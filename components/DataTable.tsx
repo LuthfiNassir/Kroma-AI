@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
@@ -95,7 +95,7 @@ export const DataTable: React.FC<DataTableProps> = ({
   return (
     <motion.div
       variants={cardEntrance}
-      className={`w-full rounded-2xl bg-[#18191b] border border-white/10 overflow-hidden shadow-xl ${className}`}
+      id="source-data-table" className={`w-full rounded-2xl bg-[#18191b] border border-white/10 overflow-hidden shadow-xl ${className}`}
     >
       {/* Table Header Bar */}
       <div className="p-4 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/[0.02]">
@@ -113,7 +113,7 @@ export const DataTable: React.FC<DataTableProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-white/50 font-mono pt-0.5">
-              {data.length} total records • {columns.length} attributes
+              {data.length} total records â€¢ {columns.length} attributes
             </p>
           </div>
         </div>
@@ -239,7 +239,7 @@ export const DataTable: React.FC<DataTableProps> = ({
         <div className="text-[11px]">
           {sortedData.length > 0 ? (
             <span>
-              Showing <span className="text-white font-semibold">{startRecordIndex}–{endRecordIndex}</span> of{" "}
+              Showing <span className="text-white font-semibold">{startRecordIndex}â€“{endRecordIndex}</span> of{" "}
               <span className="text-white font-semibold">{sortedData.length}</span> records
               {searchTerm && ` (filtered from ${data.length} total)`}
             </span>

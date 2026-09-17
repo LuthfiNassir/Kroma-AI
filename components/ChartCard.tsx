@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Sparkles } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -169,6 +169,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
 
   const chartType: ChartType = (series.type && series.type !== "none" ? series.type : defaultType) as ChartType;
   const isMultiCohort = series.data.length >= 4;
+  const isForecastChart = series.isForecastChart || (series.data[0]?.historical !== undefined && series.data[0]?.forecast !== undefined);
 
   const xAxisTitle = series.xAxisLabel || series.xKey || "Category";
   const yAxisTitle = series.yAxisLabel || series.yKey || "Value";
@@ -179,6 +180,13 @@ export const ChartCard: React.FC<ChartCardProps> = ({
 
   // Calculate total volume for pie/donut legend percentage
   const totalPieVolume = series.data.reduce((acc, curr) => acc + (Number(curr[yKey]) || 0), 0);
+
+  // Multi-series keys for line charts
+  const multiSeriesKeys = chartType === "line" && !isForecastChart && series.data[0]
+    ? Object.keys(series.data[0]).filter(
+        (k) => k !== xKey && k !== "label" && k !== "name" && k !== "category" && typeof series.data[0][k] === "number"
+      )
+    : [];
 
   return (
     <motion.div
@@ -207,13 +215,42 @@ export const ChartCard: React.FC<ChartCardProps> = ({
             {series.title || "[Data Visualization]"}
           </h3>
           <p className="text-xs text-white/50 font-mono truncate">
-            Axis: {xAxisTitle} vs {yAxisTitle}
+            {isForecastChart ? "Actual History vs 6-Month Projection" : `Axis: ${xAxisTitle} vs ${yAxisTitle}`}
           </p>
         </div>
         <div className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/70 shrink-0 ml-2">
-          [{chartType.toUpperCase()} CHART]
+          {isForecastChart ? "[FORECAST]" : `[${chartType.toUpperCase()} CHART]`}
         </div>
       </div>
+
+      {/* Forecast Indicator Pill Legend */}
+      {isForecastChart && (
+        <div className="flex items-center gap-3 mb-2 font-mono text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-1 bg-[#FE6749] rounded-full inline-block" />
+            <span className="text-white/80 font-semibold">Actual</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-1 bg-[#FE88ED] border-b border-dashed border-[#FE88ED] inline-block" />
+            <span className="text-[#FE88ED] font-semibold">Forecast (+6 Periods)</span>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-series Pill Legend */}
+      {multiSeriesKeys.length > 1 && (
+        <div className="flex items-center gap-3 mb-2 font-mono text-[10px] flex-wrap">
+          {multiSeriesKeys.map((k, i) => (
+            <div key={k} className="flex items-center gap-1.5">
+              <span
+                className="w-2.5 h-2.5 rounded-full inline-block"
+                style={{ backgroundColor: COLOR_PALETTE[i % COLOR_PALETTE.length] }}
+              />
+              <span className="text-white/80 capitalize">{k.replace(/_/g, " ")}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Responsive Height Chart Canvas Container */}
       <div className="w-full flex-1 min-h-[220px] relative font-mono">
@@ -237,7 +274,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={10}
                   tickLine={false}
-                  interval={0}
+                  interval={series.data.length > 12 ? "preserveStartEnd" : 0}
                   angle={isMultiCohort ? -20 : 0}
                   textAnchor={isMultiCohort ? "end" : "middle"}
                 />
@@ -271,7 +308,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={10}
                   tickLine={false}
-                  interval={0}
+                  interval={series.data.length > 12 ? "preserveStartEnd" : 0}
                   angle={isMultiCohort ? -20 : 0}
                   textAnchor={isMultiCohort ? "end" : "middle"}
                 />
@@ -285,17 +322,59 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                     fontSize: "12px",
                   }}
                 />
-                <Line
-                  type="monotone"
-                  dataKey={yKey}
-                  stroke={accentColor}
-                  strokeWidth={3}
-                  dot={{ fill: accentColor, r: 4 }}
-                  activeDot={{ r: 6, fill: "#ffffff" }}
-                  isAnimationActive={!shouldReduceMotion}
-                  animationDuration={500}
-                  animationEasing="ease-out"
-                />
+                {isForecastChart ? (
+                  <>
+                    <Line
+                      name="Actual"
+                      type="monotone"
+                      dataKey="historical"
+                      stroke="#FE6749"
+                      strokeWidth={3}
+                      dot={{ fill: "#FE6749", r: 3 }}
+                      activeDot={{ r: 5, fill: "#ffffff" }}
+                      isAnimationActive={!shouldReduceMotion}
+                      connectNulls={false}
+                    />
+                    <Line
+                      name="Forecast"
+                      type="monotone"
+                      dataKey="forecast"
+                      stroke="#FE88ED"
+                      strokeWidth={3}
+                      strokeDasharray="5 5"
+                      dot={{ fill: "#FE88ED", r: 4 }}
+                      activeDot={{ r: 6, fill: "#ffffff" }}
+                      isAnimationActive={!shouldReduceMotion}
+                      connectNulls={true}
+                    />
+                  </>
+                ) : multiSeriesKeys.length > 0 ? (
+                  multiSeriesKeys.map((key, i) => (
+                    <Line
+                      key={key}
+                      name={key.replace(/_/g, " ")}
+                      type="monotone"
+                      dataKey={key}
+                      stroke={COLOR_PALETTE[i % COLOR_PALETTE.length]}
+                      strokeWidth={i === 0 ? 3 : 2}
+                      dot={{ fill: COLOR_PALETTE[i % COLOR_PALETTE.length], r: 3 }}
+                      activeDot={{ r: 5, fill: "#ffffff" }}
+                      isAnimationActive={!shouldReduceMotion}
+                    />
+                  ))
+                ) : (
+                  <Line
+                    type="monotone"
+                    dataKey={yKey}
+                    stroke={accentColor}
+                    strokeWidth={3}
+                    dot={{ fill: accentColor, r: 4 }}
+                    activeDot={{ r: 6, fill: "#ffffff" }}
+                    isAnimationActive={!shouldReduceMotion}
+                    animationDuration={500}
+                    animationEasing="ease-out"
+                  />
+                )}
               </LineChart>
             ) : chartType === "pie" ? (
               <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
@@ -373,7 +452,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={10}
                   tickLine={false}
-                  interval={0}
+                  interval={series.data.length > 12 ? "preserveStartEnd" : 0}
                   angle={isMultiCohort ? -25 : 0}
                   textAnchor={isMultiCohort ? "end" : "middle"}
                 />

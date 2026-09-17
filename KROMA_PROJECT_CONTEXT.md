@@ -414,7 +414,31 @@ npm run lint
 
 ---
 
+### ADR-006: Autonomous Engine v2 Architecture & Deterministic Intelligence Grounding
+- **Status:** Approved & Implemented (2026-09-17)
+- **Context:** Previous analytical versions suffered from temporal misclassification (longitudinal monthly series misclassified as cross-sectional), fabricated categorical dimensions (e.g. synthetic "General" bucket and 1-slice donut charts when no categorical columns existed), timezone parsing drift ("Jan-2025" shifting to "2024-12-31" UTC), false-positive date parsing on 2-digit numbers (e.g. employee age 24 parsed as year 2024), unbounded forecasting, and LLM mathematical or false causal hallucinations (e.g. claiming ad spend caused an April 2026 revenue dip without proof).
+- **Decision:**
+  1. **Strict Temporal Intelligence (`lib/temporalUtils.ts`):** Implemented regex-based calendar parsing without UTC timezone drift. Enforced safe date parsing where numbers under 1970 are never treated as dates. Automated future calendar period generation (`Sep-2026` to `Feb-2027`).
+  2. **Deterministic Forecasting Engine (`lib/forecastEngine.ts`):** Implemented deterministic Ordinary Least Squares (OLS) regression with 95% confidence intervals (`predictedMin`, `predictedMax`), strict prerequisite validation (>= 6 periods, longitudinal continuity), and period-over-period growth intelligence.
+  3. **Zero Fabricated Dimensions:** Removed all synthetic "General" fallbacks. When categorical columns do not exist, `dimensions` is strictly empty (`[]`), and segmentation/cohort/breakdown capabilities are deterministically disabled.
+  4. **Grounding & Anti-Hallucination (`lib/ollama.ts`):** Transferred all mathematical computation to TypeScript. The LLM prompt is injected with pre-calculated growth rates, exact period changes (e.g. March to April 2026: $76,100 -> $74,800, -1.7%), and strict non-causal instructions (metrics moving contemporaneously must be reported as co-occurrence, never causation).
+  5. **Structured Action Dispatcher (`components/Workspace.tsx`):** Integrated live execution of structured actions (`REFRESH_DASHBOARD`, `FOCUS_ANALYSIS`, `SHOW_FORECAST`, `SHOW_SOURCE_DATA`, `NEW_ANALYSIS`) with deterministic client-side fallbacks when Ollama is unavailable or offline.
+  6. **Human-Friendly Editorial Explanations (`components/ChartModal.tsx`):** Restructured narrative presentations to lead with plain-English insights, actionable takeaways, and a collapsible `[Technical Details]` section for statistical jargon (r-value, confidence level, methodology).
+- **Affected Files:** `lib/temporalUtils.ts`, `lib/forecastEngine.ts`, `lib/dataIntelligence.ts`, `lib/capabilityEngine.ts`, `lib/visualizationEngine.ts`, `lib/dashboardEngine.ts`, `lib/ollama.ts`, `components/Workspace.tsx`, `components/ChartModal.tsx`, `components/ChartCard.tsx`, `components/DataTable.tsx`.
+
 ## 15. Project Changelog
+
+### 2026-09-17 (Engine v2 Upgrade)
+- **Added:** Deterministic calendar and temporal parser in `lib/temporalUtils.ts` fixing timezone offsets and preventing 2-digit integers (e.g. Age) from false date matches.
+- **Added:** Deterministic 6-month forecasting engine in `lib/forecastEngine.ts` with OLS regression, 95% confidence bounds, and plain English explanation generator.
+- **Added:** Growth intelligence module calculating period-over-period changes, growth streaks, and identifying exact dips and peaks.
+- **Added:** Question-answering charts in `lib/visualizationEngine.ts` (growth trajectories, multi-metric time series, scatter plots).
+- **Added:** Actual vs Forecast visual distinction in `components/ChartCard.tsx` with solid actuals and dashed predictive horizons.
+- **Added:** Live structured action execution in `components/Workspace.tsx` with deterministic fallbacks.
+- **Added:** Collapsible `[Technical Details]` in `components/ChartModal.tsx` for cleaner executive reading.
+- **Fixed:** Eliminated fake "General" categorical dimension and single-slice donut charts when data has no categorical columns.
+- **Fixed:** Eliminated fake zero-baseline points in time series data.
+- **Fixed:** Eliminated date drift (`Jan-2025` now strictly starts at Jan 2025, no Dec 2024 offset).
 
 ### 2026-09-16
 - **Added:** Central Motion System ([`lib/motion.ts`](file:///c:/Users/luthf/Downloads/DataAnalyst/lib/motion.ts)) with standardized timing tokens, editorial cubic-bezier curves, responsive spring physics, and reusable component animation variants.
@@ -448,7 +472,7 @@ Local LLM Runtime:       Ollama (http://127.0.0.1:11434 / qwen2.5-coder:7b)
 Visual Direction:        Watermelon UI (Dark Editorial Creative-Tech)
 Emoji Policy:            STRICT ZERO EMOJIS
 Primary Brand Colors:    Canvas #212222, Card #18191b, Coral #FE6749, Orchid #A5329E, White #FFFFFF
-Last Context Update:     2026-09-16
+Last Context Update:     2026-09-17 (Engine v2 Upgrade)
 ```
 
 ---

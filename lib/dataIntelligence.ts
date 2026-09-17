@@ -1,4 +1,4 @@
-import {
+﻿import {
   ColumnIntelligence,
   ColumnNumericStats,
   ColumnValueFrequency,
@@ -11,6 +11,8 @@ import {
 } from "./types";
 import { discoverRelationships } from "./relationshipEngine";
 import { detectAnalyticalCapabilities } from "./capabilityEngine";
+import { parseDatePeriod } from "./temporalUtils";
+import { calculateGrowthIntelligence, calculateDeterministicForecast } from "./forecastEngine";
 
 // Calculate numeric distribution statistics
 export function calculateNumericStats(values: number[]): ColumnNumericStats | undefined {
@@ -63,16 +65,16 @@ export function calculateTopFrequencies(values: any[]): ColumnValueFrequency[] {
     }));
 }
 
-// Detect temporal metadata and continuity
+// Detect temporal metadata and continuity using deterministic date parsing
 export function analyzeTemporalColumn(data: Record<string, any>[], dateColName: string): TemporalIntelligence {
-  const dateValues: { raw: any; time: number }[] = [];
+  const dateValues: { raw: string; parsed: any; sortKey: number }[] = [];
 
   data.forEach((row) => {
     const raw = row[dateColName];
-    if (raw) {
-      const parsed = Date.parse(String(raw));
-      if (!isNaN(parsed)) {
-        dateValues.push({ raw, time: parsed });
+    if (raw !== null && raw !== undefined && raw !== "") {
+      const parsed = parseDatePeriod(raw);
+      if (parsed) {
+        dateValues.push({ raw: String(raw), parsed, sortKey: parsed.sortKey });
       }
     }
   });
@@ -87,45 +89,55 @@ export function analyzeTemporalColumn(data: Record<string, any>[], dateColName: 
   }
 
   // Sort chronologically
-  dateValues.sort((a, b) => a.time - b.time);
-  const minTime = dateValues[0].time;
-  const maxTime = dateValues[dateValues.length - 1].time;
+  dateValues.sort((a, b) => a.sortKey - b.sortKey);
+  const first = dateValues[0].parsed;
+  const last = dateValues[dateValues.length - 1].parsed;
 
-  // Calculate gaps between consecutive observations
-  const intervals: number[] = [];
-  for (let i = 1; i < dateValues.length; i++) {
-    const diffDays = (dateValues[i].time - dateValues[i - 1].time) / (1000 * 60 * 60 * 24);
-    if (diffDays > 0) intervals.push(diffDays);
-  }
-
+  // Infer frequency from parsed components
   let freq: "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular" = "irregular";
-  let isContinuous = false;
-  let continuityScore = 0.5;
+  let isContinuous = true;
+  let continuityScore = 0.95;
 
-  if (intervals.length > 0) {
-    const avgDiff = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-    if (avgDiff <= 1.5) freq = "daily";
-    else if (avgDiff <= 8) freq = "weekly";
-    else if (avgDiff <= 35) freq = "monthly";
-    else if (avgDiff <= 100) freq = "quarterly";
-    else if (avgDiff <= 380) freq = "yearly";
+  const hasMonths = dateValues.every((d) => d.parsed.month !== undefined);
+  const hasQuarters = dateValues.every((d) => d.parsed.quarter !== undefined);
+  const hasDays = dateValues.every((d) => d.parsed.day !== undefined);
+  const hasOnlyYears = dateValues.every((d) => d.parsed.year !== undefined && !d.parsed.month && !d.parsed.quarter);
 
-    // Standard deviation of intervals to score continuity
-    const varInterval = intervals.reduce((a, b) => a + Math.pow(b - avgDiff, 2), 0) / intervals.length;
-    const stdDiff = Math.sqrt(varInterval);
-    continuityScore = Math.max(0, Math.min(1, 1 - (stdDiff / Math.max(avgDiff, 1))));
-    isContinuous = continuityScore >= 0.5 && dateValues.length >= 6;
+  if (hasQuarters) {
+    freq = "quarterly";
+  } else if (hasMonths && !hasDays) {
+    freq = "monthly";
+    // Check consecutive monthly intervals
+    for (let i = 1; i < dateValues.length; i++) {
+      const pPrev = dateValues[i - 1].parsed;
+      const pCurr = dateValues[i].parsed;
+      const mDiff = (pCurr.year - pPrev.year) * 12 + (pCurr.month - pPrev.month);
+      if (mDiff !== 1) {
+        isContinuous = false;
+        continuityScore = 0.7;
+      }
+    }
+  } else if (hasDays) {
+    freq = "daily";
+  } else if (hasOnlyYears) {
+    freq = "yearly";
   }
+
+  const startLabel = first.displayLabel;
+  const endLabel = last.displayLabel;
 
   return {
     hasTemporal: true,
     dateColumn: dateColName,
-    startDate: new Date(minTime).toISOString().slice(0, 10),
-    endDate: new Date(maxTime).toISOString().slice(0, 10),
+    startDate: first.raw,
+    endDate: last.raw,
+    startLabel,
+    endLabel,
     observationCount: dateValues.length,
     frequency: freq,
     isContinuous,
     continuityScore: Math.round(continuityScore * 100) / 100,
+    orderedLabels: dateValues.map((d) => d.parsed.displayLabel),
   };
 }
 
@@ -145,9 +157,38 @@ export function profileColumns(data: Record<string, any>[], columns: string[]): 
 
     // Check numeric presence
     const numericValues = validValues.map((v) => Number(v)).filter((v) => !isNaN(v) && isFinite(v));
-    const isMostlyNumeric = numericValues.length > validValues.length * 0.6;
+    const isMostlyNumeric = validValues.length > 0 && numericValues.length >= validValues.length * 0.75;
 
-    // 1. Identifier & Unique Entity Name Check
+    // Check date presence
+    const dateParsedCount = validValues.filter((v) => parseDatePeriod(v) !== null).length;
+    const isMostlyDate = validValues.length > 0 && dateParsedCount >= validValues.length * 0.75;
+
+    // 1. Date Check (Higher precedence than generic text/numbers)
+    const isDateName =
+      colLower.includes("date") ||
+      colLower.includes("quarter") ||
+      colLower.includes("month") ||
+      colLower.includes("year") ||
+      colLower.includes("timestamp") ||
+      colLower.includes("period") ||
+      colLower === "time" ||
+      colLower === "day" ||
+      colLower === "week";
+
+    if (isMostlyDate || (isDateName && !isMostlyNumeric)) {
+      return {
+        name: col,
+        semanticType: "date",
+        dataType: "date",
+        missingCount,
+        missingRate,
+        uniqueCount,
+        cardinality: uniqueCount > 20 ? "high" : "medium",
+        topValues: calculateTopFrequencies(validValues),
+      };
+    }
+
+    // 2. Identifier & Unique Entity Name Check
     const isNameCol =
       colLower === "name" ||
       colLower === "student_name" ||
@@ -185,28 +226,6 @@ export function profileColumns(data: Record<string, any>[], columns: string[]): 
       };
     }
 
-    // 2. Date Check
-    const isDateCol =
-      colLower.includes("date") ||
-      colLower.includes("quarter") ||
-      colLower.includes("month") ||
-      colLower.includes("year") ||
-      colLower.includes("time") ||
-      colLower.includes("timestamp") ||
-      colLower.includes("day");
-
-    if (isDateCol) {
-      return {
-        name: col,
-        semanticType: "date",
-        dataType: "date",
-        missingCount,
-        missingRate,
-        uniqueCount,
-        cardinality: uniqueCount > 20 ? "high" : "medium",
-      };
-    }
-
     // 3. Binary / Target Flag Check
     const isBinary =
       uniqueCount <= 2 &&
@@ -218,13 +237,11 @@ export function profileColumns(data: Record<string, any>[], columns: string[]): 
       colLower.includes("churn") ||
       colLower.includes("hypertension") ||
       colLower.includes("heart_disease") ||
-      colLower.includes("active") ||
       colLower.includes("target") ||
       colLower.includes("default") ||
       colLower.includes("outcome") ||
       colLower.includes("attrition") ||
-      colLower.includes("converted") ||
-      colLower.includes("status_flag");
+      colLower.includes("converted");
 
     if (isBinary || (isTargetName && uniqueCount <= 5)) {
       return {
@@ -246,53 +263,45 @@ export function profileColumns(data: Record<string, any>[], columns: string[]): 
         colLower.includes("age") ||
         colLower.includes("bmi") ||
         colLower.includes("gpa") ||
-        colLower.includes("glucose") ||
         colLower.includes("rate") ||
         colLower.includes("rating") ||
-        colLower.includes("temp") ||
         colLower.includes("score") ||
         colLower.includes("percent") ||
         colLower.includes("ratio") ||
-        colLower.includes("delay") ||
         colLower.includes("tenure") ||
         colLower.includes("pclass") ||
-        colLower.includes("fare") ||
-        colLower.includes("pressure") ||
-        colLower.includes("grade") ||
-        colLower.includes("cholesterol");
-
-      const semanticType: SemanticColumnType = isNonAdditiveName ? "non_additive_numeric" : "additive_numeric";
+        colLower.includes("rank");
 
       return {
         name: col,
-        semanticType,
+        semanticType: isNonAdditiveName ? "non_additive_numeric" : "additive_numeric",
         dataType: "number",
         missingCount,
         missingRate,
         uniqueCount,
-        cardinality: uniqueCount <= 6 ? "low" : uniqueCount <= 30 ? "medium" : "high",
+        cardinality: uniqueCount <= 5 ? "low" : uniqueCount <= 20 ? "medium" : "high",
         numericStats: calculateNumericStats(numericValues),
+        topValues: calculateTopFrequencies(validValues),
       };
     }
 
-    // 5. Categorical Dimensions (Strict check: MUST have repeated entries if low cardinality)
-    const isLowCard = uniqueCount >= 2 && uniqueCount <= 6 && (rowCount <= 3 || uniqueCount < rowCount);
-    const isMedCard = uniqueCount > 6 && uniqueCount <= 25 && uniqueCount < rowCount;
+    // 5. Categorical Dimensions (Strictly non-unique string categories)
+    const isHighCard = uniqueCount > 20 || uniqueCount >= rowCount * 0.8;
 
     return {
       name: col,
-      semanticType: isLowCard || isMedCard ? "categorical" : "high_cardinality_text",
+      semanticType: isHighCard ? "high_cardinality_text" : "categorical",
       dataType: "string",
       missingCount,
       missingRate,
       uniqueCount,
-      cardinality: isLowCard ? "low" : isMedCard ? "medium" : "high",
+      cardinality: uniqueCount <= 6 ? "low" : uniqueCount <= 20 ? "medium" : "high",
       topValues: calculateTopFrequencies(validValues),
     };
   });
 }
 
-// Generate deterministically grounded Dataset Summary Narrative
+// Generate Dataset Summary Narrative in plain, non-technical English
 export function generateDatasetSummaryNarrative(
   rowCount: number,
   colCount: number,
@@ -304,62 +313,86 @@ export function generateDatasetSummaryNarrative(
   capabilities: any,
   archetype: DatasetArchetype
 ): DatasetSummaryNarrative {
-  // Construct plain-English domain description
-  const colNames = profiledCols.map((c) => c.name.toLowerCase()).join(" ");
-  let domainDescription = "";
+  const isTemporal = temporal.hasTemporal;
+  const measureNames = measures.map((m) => m.replace(/_/g, " "));
 
-  if (colNames.includes("student") || colNames.includes("gpa") || colNames.includes("grade") || colNames.includes("course")) {
-    domainDescription = "This dataset contains student records describing individual demographic attributes, academic performance metrics, and department affiliations. Kroma detected a cross-sectional categorical structure rather than a sequential time-series.";
-  } else if (colNames.includes("patient") || colNames.includes("stroke") || colNames.includes("bmi") || colNames.includes("glucose")) {
-    domainDescription = "This dataset contains clinical health records describing individual patient attributes, biometric markers, and target diagnostic outcomes. Kroma structured this as an outcome-focused cross-sectional profile.";
-  } else if (temporal.hasTemporal && measures.length > 0) {
-    domainDescription = `This dataset contains transactional time-series observations tracking longitudinal ${measures.join(", ")} metrics over ${temporal.observationCount} ${temporal.frequency} intervals.`;
-  } else if (colNames.includes("employee") || colNames.includes("salary") || colNames.includes("department")) {
-    domainDescription = "This dataset contains organizational employee records detailing department allocations, compensation distributions, and performance metrics.";
+  let domainDescription = "";
+  let datasetType = "Cross-Sectional Dataset";
+
+  if (isTemporal && measures.length > 0) {
+    const timeSpanText = temporal.startLabel && temporal.endLabel
+      ? `from ${temporal.startLabel} through ${temporal.endLabel}`
+      : `spanning ${temporal.observationCount} ${temporal.frequency || "time"} periods`;
+
+    const metricsJoined = measureNames.length <= 2
+      ? measureNames.join(" and ")
+      : `${measureNames.slice(0, -1).join(", ")}, and ${measureNames[measureNames.length - 1]}`;
+
+    if (archetype === "FINANCIAL") {
+      datasetType = "Business Performance Time Series";
+      domainDescription = `This dataset tracks monthly business performance ${timeSpanText}. It contains ${metricsJoined}, allowing Kroma to examine growth, relationships between metrics, and future revenue projections.`;
+    } else {
+      datasetType = "Longitudinal Time Series";
+      domainDescription = `This dataset records sequential observations ${timeSpanText} across ${metricsJoined}.`;
+    }
+  } else if (targets.length > 0) {
+    datasetType = "Target Outcome Analysis";
+    domainDescription = `This dataset profiles ${rowCount} records focusing on the target outcome [${targets.join(", ").replace(/_/g, " ")}].`;
+  } else if (dimensions.length > 0 && measures.length > 0) {
+    datasetType = "Cross-Sectional Cohort Dataset";
+    domainDescription = `This dataset contains ${rowCount} individual records across ${dimensions.length} categories and ${measures.length} numeric measures.`;
   } else {
-    domainDescription = `This dataset contains ${rowCount} records across ${colCount} attributes, structured for cross-sectional cohort evaluation and distribution analysis.`;
+    datasetType = "General Structured Dataset";
+    domainDescription = `This dataset contains ${rowCount} records and ${colCount} attributes.`;
   }
 
-  // Format type title
-  const typeMap: Record<DatasetArchetype, string> = {
-    FINANCIAL: "Financial / Transactional Time-Series",
-    QUANTITATIVE_PROGRESS: "Quantitative Progress & Longitudinal Metrics",
-    CATEGORICAL_OPERATIONAL: "Operational Process & Pipeline Flow",
-    CROSS_SECTIONAL_DISCOVERY: "Cross-Sectional Demographic & Cohort Discovery",
-  };
+  // Temporal summary text (Exact, no timezone drift)
+  const temporalInfo = isTemporal
+    ? `${temporal.observationCount} ${temporal.frequency} periods (${temporal.startLabel || temporal.startDate} to ${temporal.endLabel || temporal.endDate})`
+    : "Static Cross-Sectional (No time dimension)";
 
-  const datasetType = typeMap[archetype] || "Cross-Sectional Discovery";
-
-  // Temporal summary text
-  const temporalInfo = temporal.hasTemporal
-    ? `${temporal.observationCount} ${temporal.frequency} observations (${temporal.startDate} to ${temporal.endDate})`
-    : "Static Cross-Sectional (No temporal dimension detected)";
-
-  // Available analysis labels
+  // Available analysis labels - only what the dataset truly supports!
   const analysisAvailable: string[] = [];
-  if (capabilities.cohortAnalysis?.available) analysisAvailable.push("Cohort Comparisons");
-  if (capabilities.distributionAnalysis?.available) analysisAvailable.push("Distribution & Spread");
-  if (capabilities.correlationAnalysis?.available) analysisAvailable.push("Correlation Analysis");
-  if (capabilities.timeSeriesForecasting?.available) analysisAvailable.push("Time-Series Forecasting");
-  if (capabilities.targetPrediction?.available) analysisAvailable.push("Target Outcome Risk");
-  if (capabilities.funnelAnalysis?.available) analysisAvailable.push("Funnel Throughput");
+  if (capabilities.trendAnalysis?.available && measures[0]) {
+    analysisAvailable.push(`${measures[0].replace(/_/g, " ")} Trend`);
+  }
+  if (isTemporal && measures.length > 0) {
+    analysisAvailable.push("Growth Analysis");
+  }
+  if (capabilities.correlationAnalysis?.available && measures.length >= 2) {
+    analysisAvailable.push("Metric Relationships");
+  }
+  if (capabilities.timeSeriesForecasting?.available && measures[0]) {
+    analysisAvailable.push(`${measures[0].replace(/_/g, " ")} Forecast`);
+  }
+  if (capabilities.cohortAnalysis?.available && dimensions.length > 0) {
+    analysisAvailable.push("Category Comparison");
+  }
+  if (capabilities.targetPrediction?.available) {
+    analysisAvailable.push("Outcome Risk");
+  }
+  if (capabilities.distributionAnalysis?.available && !isTemporal) {
+    analysisAvailable.push("Distribution Spread");
+  }
 
-  // Quality Text
+  if (analysisAvailable.length === 0) {
+    analysisAvailable.push("Overview Analysis");
+  }
+
+  // Data Quality Text
   const missingTotal = profiledCols.reduce((acc, c) => acc + c.missingCount, 0);
   const dataQualityText = missingTotal === 0
-    ? "100.0% Completeness (0 missing cells detected)"
-    : `${missingTotal} missing cells detected across ${colCount} attributes`;
+    ? "100.0% Complete (0 missing values)"
+    : `${missingTotal} missing cells across ${colCount} attributes`;
 
   // Rationale
   let dashboardRationale = "";
-  if (temporal.hasTemporal && capabilities.timeSeriesForecasting?.available) {
-    dashboardRationale = "Kroma prioritizes longitudinal trend lines, category volume contributions, and linear continuation forecasting because sufficient continuous temporal history is present.";
-  } else if (targets.length > 0) {
-    dashboardRationale = `Kroma emphasizes cohort cross-tabulations and risk rate distributions against target outcome [${targets.join(", ")}] to isolate key variance factors.`;
+  if (isTemporal && capabilities.timeSeriesForecasting?.available) {
+    dashboardRationale = `Kroma prioritizes historical trend lines, growth trajectory, and a deterministic 6-month forecast because the dataset contains a continuous ${temporal.frequency} time dimension without fake category assumptions.`;
   } else if (dimensions.length > 0 && measures.length > 0) {
-    dashboardRationale = "Kroma emphasizes categorical distributions, cohort mean yields, and numeric variance spreads because the dataset lacks sequential temporal continuity for time-series forecasting.";
+    dashboardRationale = `Kroma emphasizes comparative category totals and distributions across genuine categories in the data.`;
   } else {
-    dashboardRationale = "Kroma presents categorical population distributions and complete attribute matrix breakdowns.";
+    dashboardRationale = `Kroma presents metric distributions and relationships directly from the source records.`;
   }
 
   return {
@@ -371,7 +404,7 @@ export function generateDatasetSummaryNarrative(
     dimensions: dimensions.slice(0, 4),
     measures: measures.slice(0, 4),
     temporalInfo,
-    analysisAvailable: analysisAvailable.length > 0 ? analysisAvailable : ["Categorical Comparison", "Distribution Breakdown"],
+    analysisAvailable,
     dataQualityText,
     dashboardRationale,
   };
@@ -393,8 +426,9 @@ export function buildDatasetIntelligenceProfile(
     .filter((c) => c.semanticType === "additive_numeric" || c.semanticType === "non_additive_numeric")
     .map((c) => c.name);
 
+  // STRICT DIMENSIONS: only genuine categorical columns, never dates, never unique text!
   const dimensions = profiledCols
-    .filter((c) => c.semanticType === "categorical" || (c.semanticType === "date" && c.cardinality === "low"))
+    .filter((c) => c.semanticType === "categorical" && c.cardinality !== "unique")
     .map((c) => c.name);
 
   const targets = profiledCols
@@ -476,9 +510,9 @@ export function buildDatasetIntelligenceProfile(
     colStr.includes("distance") ||
     colStr.includes("calorie") ||
     colStr.includes("score") ||
-    colStr.includes("unit");
+    colStr.includes("unit") ||
+    colStr.includes("order");
 
-  // Strict workflow terms ONLY (excludes department)
   const hasWorkflowTerms =
     colStr.includes("funnel_stage") ||
     colStr.includes("pipeline_stage") ||
@@ -489,14 +523,16 @@ export function buildDatasetIntelligenceProfile(
   if (hasFinancialTerms) secondarySignals.push("Financial Value Metrics");
   if (hasWorkflowTerms) secondarySignals.push("Operational Workflow / Funnel");
   if (targets.length > 0) secondarySignals.push("Target Outcome Flag");
-  if (dimensions.length > 1) secondarySignals.push("Multi-Segment Categorical");
+  if (dimensions.length > 0) secondarySignals.push("Multi-Segment Categorical");
 
-  if (temporal.hasTemporal && measures.length > 0 && hasFinancialTerms) {
-    primaryArchetype = "FINANCIAL";
-    confidence = 0.95;
-  } else if ((temporal.hasTemporal || colStr.includes("week") || colStr.includes("day")) && hasProgressTerms) {
-    primaryArchetype = "QUANTITATIVE_PROGRESS";
-    confidence = 0.9;
+  if (temporal.hasTemporal && measures.length > 0) {
+    if (hasFinancialTerms || measures.some((m) => m.toLowerCase().includes("revenue") || m.toLowerCase().includes("spend"))) {
+      primaryArchetype = "FINANCIAL";
+      confidence = 0.95;
+    } else {
+      primaryArchetype = "QUANTITATIVE_PROGRESS";
+      confidence = 0.9;
+    }
   } else if (hasWorkflowTerms) {
     primaryArchetype = "CATEGORICAL_OPERATIONAL";
     confidence = 0.88;
@@ -504,6 +540,16 @@ export function buildDatasetIntelligenceProfile(
     primaryArchetype = "CROSS_SECTIONAL_DISCOVERY";
     confidence = 0.85;
   }
+
+  // Calculate Growth Intelligence if temporal + measures exist
+  const growth = (temporal.hasTemporal && temporal.dateColumn && measures.length > 0)
+    ? calculateGrowthIntelligence(data, temporal.dateColumn, measures[0]) || undefined
+    : undefined;
+
+  // Calculate Forecast if capability is available
+  const forecast = (capabilities.timeSeriesForecasting.available && temporal.dateColumn && measures.length > 0)
+    ? calculateDeterministicForecast(data, temporal.dateColumn, measures[0], 6) || undefined
+    : undefined;
 
   // Generate the grounded summary narrative
   const summaryNarrative = generateDatasetSummaryNarrative(
@@ -541,5 +587,7 @@ export function buildDatasetIntelligenceProfile(
       secondarySignals,
       description: `${primaryArchetype} Profile with ${secondarySignals.join(", ") || "General Attributes"}`,
     },
+    growth,
+    forecast,
   };
 }
