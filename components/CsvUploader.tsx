@@ -1,36 +1,26 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import { BrandMark } from "@/components/ui/BrandMark";
 import { RadialGradient } from "@/components/ui/RadialGradient";
 import { Tiles } from "@/components/ui/Tiles";
-import { BrandMark } from "@/components/ui/BrandMark";
 import { SAMPLE_DATASETS } from "@/lib/dataEngine";
 
 interface CsvUploaderProps {
-  onUploadCsv: (csvContent: string, fileName: string) => void;
+  onUploadCsv: (rawCsv: string, fileName: string) => void;
 }
 
 export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files[0]) {
-      processFile(files[0]);
-    }
-  };
-
   const processFile = (file: File) => {
-    if (!file.name.endsWith(".csv")) {
-      alert("[Error: Please upload a valid .csv file]");
-      return;
-    }
+    if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        onUploadCsv(content, file.name);
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (text) {
+        onUploadCsv(text, file.name);
       }
     };
     reader.readAsText(file);
@@ -46,6 +36,7 @@ export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
 
       {/* 3. Foreground Content */}
       <div className="relative z-10 max-w-2xl w-full text-center space-y-6">
+        {/* Top Pill Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
           <BrandMark className="w-4 h-4" />
           <span className="text-[11px] font-mono tracking-widest text-[#FE6749] uppercase font-semibold">
@@ -53,16 +44,19 @@ export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
           </span>
         </div>
 
+        {/* Hero Heading */}
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-tight font-sans">
-          Transform spreadsheets <br />
-          into <span className="text-[#FE6749]">visual intelligence.</span>
+          Transform spreadsheets into <br />
+          <span className="text-[#FE6749]">visual intelligence.</span>
         </h1>
 
-        <p className="text-sm text-white/60 max-w-lg mx-auto leading-relaxed font-sans">
-          Drop any CSV dataset to instantly generate executive Bento dashboards, statistical correlations, and conversational insights.
+        {/* Supporting Subtitle */}
+        <p className="text-xs md:text-sm text-white/60 max-w-lg mx-auto leading-relaxed font-sans">
+          Drop any CSV file below to instantly generate interactive Bento dashboards,
+          correlations, and deep statistical discovery with zero cloud exposure.
         </p>
 
-        {/* Dropzone Card */}
+        {/* Dropzone Area */}
         <div
           onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => {
@@ -86,17 +80,22 @@ export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.tsv,.txt"
             className="hidden"
-            onChange={handleFileChange}
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                processFile(e.target.files[0]);
+              }
+            }}
           />
 
           <div className="flex flex-col items-center space-y-3 font-sans">
-            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/80">
-              <BrandMark className="w-6 h-6" />
+            {/* Dropzone Center Icon */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-2 flex items-center justify-center">
+              <BrandMark className="w-10 h-10" />
             </div>
             <div className="text-sm font-semibold text-white">
-              Drag & drop your CSV file here, or <span className="text-[#FE6749] underline decoration-1 underline-offset-4">browse</span>
+              Drag & drop your CSV file here, or <span className="text-[#FE6749] underline decoration-1 underline-offset-4">[browse]</span>
             </div>
             <div className="text-xs text-white/40 font-mono">
               Supports any tabular schema · Up to 50MB · 100% on-device compute
@@ -106,7 +105,7 @@ export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
 
         {/* Sample Demo Chips */}
         <div className="flex items-center justify-center gap-2 flex-wrap pt-2 font-sans">
-          <span className="text-xs text-white/50">Or try sample demo:</span>
+          <span className="text-xs text-white/50 font-mono">Or try sample demo:</span>
           {["Sales", "Department", "Marketing"].map((sample) => {
             const sampleKey = sample.toLowerCase() as "sales" | "department" | "marketing";
             return (
@@ -114,7 +113,7 @@ export function CsvUploader({ onUploadCsv }: CsvUploaderProps) {
                 key={sample}
                 type="button"
                 onClick={() => onUploadCsv(SAMPLE_DATASETS[sampleKey], `sample_${sampleKey}.csv`)}
-                className="rounded-full px-3.5 py-1 bg-white/5 border border-white/10 text-xs font-medium text-white/80 hover:border-[#FE6749]/50 hover:text-white transition cursor-pointer"
+                className="rounded-full px-3.5 py-1 bg-white/5 border border-white/10 text-xs font-mono text-white/80 hover:border-[#FE6749]/50 hover:text-white transition cursor-pointer"
               >
                 {`[Sample: ${sample}]`}
               </button>

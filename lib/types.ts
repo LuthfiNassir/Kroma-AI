@@ -18,6 +18,141 @@ export type DatasetArchetype =
   | "CATEGORICAL_OPERATIONAL"
   | "CROSS_SECTIONAL_DISCOVERY";
 
+export type SemanticColumnType =
+  | "identifier"
+  | "date"
+  | "binary_target"
+  | "additive_numeric"
+  | "non_additive_numeric"
+  | "categorical"
+  | "high_cardinality_text";
+
+export interface ColumnValueFrequency {
+  value: string;
+  count: number;
+  pct: number;
+}
+
+export interface ColumnNumericStats {
+  min: number;
+  max: number;
+  mean: number;
+  median: number;
+  sum: number;
+  stdDev: number;
+  q1: number;
+  q3: number;
+}
+
+export interface ColumnIntelligence {
+  name: string;
+  semanticType: SemanticColumnType;
+  dataType: "number" | "string" | "date" | "boolean";
+  missingCount: number;
+  missingRate: number;
+  uniqueCount: number;
+  cardinality: "binary" | "low" | "medium" | "high" | "unique";
+  numericStats?: ColumnNumericStats;
+  topValues?: ColumnValueFrequency[];
+}
+
+export interface TemporalIntelligence {
+  hasTemporal: boolean;
+  dateColumn?: string;
+  startDate?: string;
+  endDate?: string;
+  observationCount: number;
+  frequency?: "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular";
+  isContinuous: boolean;
+  continuityScore: number;
+}
+
+export interface DataQualityIntelligence {
+  completenessRate: number;
+  duplicateRowCount: number;
+  missingCellsTotal: number;
+  issues: string[];
+}
+
+export type RelationshipType =
+  | "numeric_correlation"
+  | "temporal_trend"
+  | "category_breakdown"
+  | "cross_tabulation"
+  | "process_funnel"
+  | "hierarchy"
+  | "target_outcome";
+
+export interface DetectedRelationship {
+  id: string;
+  type: RelationshipType;
+  sourceColumn: string;
+  targetColumn: string;
+  strength: number; // e.g. correlation coefficient (-1 to 1) or variance ratio
+  description: string;
+  recommendedChart: ChartType;
+  insights: string;
+}
+
+export interface CapabilityDetail {
+  available: boolean;
+  reason: string;
+  relevantColumns: string[];
+}
+
+export interface AnalyticalCapabilities {
+  trendAnalysis: CapabilityDetail;
+  timeSeriesForecasting: CapabilityDetail;
+  targetPrediction: CapabilityDetail;
+  correlationAnalysis: CapabilityDetail;
+  cohortAnalysis: CapabilityDetail;
+  funnelAnalysis: CapabilityDetail;
+  segmentationAnalysis: CapabilityDetail;
+  distributionAnalysis: CapabilityDetail;
+  outlierAnalysis: CapabilityDetail;
+}
+
+export interface ArchetypeIntelligence {
+  primary: DatasetArchetype;
+  confidence: number;
+  secondarySignals: string[];
+  description: string;
+}
+
+export interface DatasetSummaryNarrative {
+  title: string;
+  overview: string;
+  datasetType: string;
+  recordsCount: number;
+  attributesCount: number;
+  dimensions: string[];
+  measures: string[];
+  temporalInfo?: string;
+  analysisAvailable: string[];
+  dataQualityText: string;
+  dashboardRationale: string;
+}
+
+export interface DatasetIntelligenceProfile {
+  datasetSummary: {
+    rowCount: number;
+    columnCount: number;
+    dataQualityScore: number;
+    schemaAnomalies: number;
+  };
+  summaryNarrative?: DatasetSummaryNarrative;
+  columns: ColumnIntelligence[];
+  temporal: TemporalIntelligence;
+  measures: string[];
+  dimensions: string[];
+  targets: string[];
+  identifiers: string[];
+  relationships: DetectedRelationship[];
+  dataQuality: DataQualityIntelligence;
+  capabilities: AnalyticalCapabilities;
+  archetype: ArchetypeIntelligence;
+}
+
 export interface KPICardData {
   label: string;
   value: string | number;
@@ -31,9 +166,12 @@ export interface KeyStat {
 
 export interface ChartAnalysis {
   whatItShows: string;
-  trend: string;
+  mainFinding?: string;
+  whatStandsOut?: string[];
+  whyItMatters?: string;
   keyStats: KeyStat[];
   takeaway: string;
+  trend?: string;
 }
 
 export interface ChartDataSeries {
@@ -60,8 +198,30 @@ export interface HighlightsCardData {
   items: HighlightItem[];
 }
 
+export type ActionType =
+  | "ANSWER"
+  | "CREATE_VISUALIZATION"
+  | "REFRESH_DASHBOARD"
+  | "REBUILD_DASHBOARD"
+  | "FORECAST"
+  | "ANALYZE_RELATIONSHIP";
+
+export interface StructuredAIAction {
+  type: ActionType;
+  focus?: string;
+  filters?: Record<string, any>;
+  targetMetric?: string;
+  targetDimension?: string;
+}
+
+export type DatasetSourceType = "csv" | "pasted";
+
 export interface DashboardState {
   profileType: DatasetArchetype;
+  profile?: DatasetIntelligenceProfile;
+  summaryNarrative?: DatasetSummaryNarrative;
+  focus?: string;
+  sourceType?: DatasetSourceType;
   kpis: KPICardData[];
   charts: ChartDataSeries[];
   heroChart?: ChartDataSeries | null;
@@ -72,6 +232,8 @@ export interface DashboardState {
   columns: string[];
   suggestions?: string[];
   projectionData?: Record<string, any>[];
+  forecastingSupported?: boolean;
+  forecastReason?: string;
   whatIfParams?: {
     deltaPercent?: number;
     deltaAmount?: number;
@@ -83,6 +245,7 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  action?: StructuredAIAction;
   sqlQuery?: string | null;
   insight?: string | null;
   inlineChart?: ChartDataSeries | null;
@@ -94,6 +257,7 @@ export interface ChatMessage {
 export interface AnalysisSession {
   sessionId: string;
   title: string;
+  sourceType?: DatasetSourceType;
   createdAt: string;
   rowCount: number;
   columnCount: number;
@@ -105,6 +269,7 @@ export interface AnalysisResponse {
   explanation: string;
   insight: string;
   sql: string | null;
+  action?: StructuredAIAction;
   chartType: ChartType;
   chartTitle?: string | null;
   xAxisLabel?: string | null;

@@ -1,7 +1,11 @@
+"use client";
+
 import React from "react";
-import { Plus, Database, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { Plus, Database, ChevronLeft, ChevronRight } from "lucide-react";
 import { AnalysisSession } from "@/lib/types";
 import { BrandMark } from "@/components/ui/BrandMark";
+import { buttonTapMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -23,27 +27,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onToggleOpen,
 }) => {
+  const shouldReduceMotion = useReducedMotion();
+
   return (
-    <aside
-      className={cn(
-        "bg-[#18191b] border-r border-white/10 flex flex-col h-full transition-all duration-300 relative z-20 shrink-0",
-        isOpen ? "w-64 md:w-72" : "w-16"
-      )}
+    <motion.aside
+      animate={{ width: isOpen ? 288 : 64 }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      className="bg-[#18191b] border-r border-white/10 flex flex-col h-full relative z-20 shrink-0 overflow-hidden"
     >
       {/* Toggle Button */}
-      <button
+      <motion.button
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
         type="button"
         onClick={onToggleOpen}
-        className="absolute -right-3 top-6 bg-[#212222] border border-white/20 text-white/70 hover:text-white rounded-full p-1 shadow-md cursor-pointer transition z-30"
+        className="absolute right-2 top-4 bg-[#212222] border border-white/20 text-white/70 hover:text-white rounded-full p-1 shadow-md cursor-pointer transition z-30"
+        title={isOpen ? "Collapse Sidebar" : "Expand Sidebar"}
       >
         {isOpen ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-      </button>
+      </motion.button>
 
       {/* Header */}
       <div className="p-4 border-b border-white/10 flex items-center justify-between h-[60px]">
         {isOpen ? (
           <div className="flex items-center gap-2.5">
-            <BrandMark className="w-7 h-7" />
+            <BrandMark className="w-7 h-7" priority />
             <div>
               <h1 className="text-base font-bold text-white tracking-tight leading-none">
                 Kroma
@@ -55,31 +63,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         ) : (
           <div className="mx-auto">
-            <BrandMark className="w-7 h-7" />
+            <BrandMark className="w-7 h-7" priority />
           </div>
         )}
       </div>
 
       {/* Top Action Button */}
-      <div className="p-4">
+      <div className="p-3">
         {isOpen ? (
-          <button
+          <motion.button
+            {...(shouldReduceMotion ? {} : buttonTapMotion)}
             type="button"
             onClick={onNewSession}
-            className="w-full rounded-xl bg-[#FE6749] text-white font-semibold text-xs py-2.5 px-4 shadow-lg hover:bg-[#e85a3c] transition flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full rounded-xl bg-[#FE6749] text-white font-semibold text-xs py-2.5 px-4 shadow-lg hover:bg-[#e85a3c] transition-colors flex items-center justify-center gap-2 cursor-pointer font-mono"
           >
             <Plus className="w-4 h-4" />
-            <span>[+ New Analysis]</span>
-          </button>
+            <span>[New Analysis]</span>
+          </motion.button>
         ) : (
-          <button
+          <motion.button
+            {...(shouldReduceMotion ? {} : buttonTapMotion)}
             type="button"
             onClick={onNewSession}
             title="New Analysis"
-            className="w-10 h-10 rounded-xl bg-[#FE6749] text-white flex items-center justify-center mx-auto hover:bg-[#e85a3c] transition cursor-pointer"
+            className="w-10 h-10 rounded-xl bg-[#FE6749] text-white flex items-center justify-center mx-auto hover:bg-[#e85a3c] transition-colors cursor-pointer"
           >
             <Plus className="w-5 h-5" />
-          </button>
+          </motion.button>
         )}
       </div>
 
@@ -101,11 +111,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           sessions.map((session) => {
             const isActive = session.sessionId === activeSessionId;
             return (
-              <div
+              <motion.div
                 key={session.sessionId}
+                whileHover={{ x: isOpen ? 2 : 0 }}
+                transition={{ duration: 0.15 }}
                 onClick={() => onSelectSession(session.sessionId)}
                 className={cn(
-                  "rounded-xl p-3 text-sm text-left transition flex items-center justify-between cursor-pointer group relative overflow-hidden",
+                  "rounded-xl p-3 text-sm text-left transition-colors flex items-center justify-between cursor-pointer group relative overflow-hidden",
                   isActive
                     ? "bg-white/10 text-white font-medium border border-white/15 border-l-4 border-l-[#FE6749]"
                     : "text-white/70 hover:bg-white/5 hover:text-white"
@@ -142,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                   </div>
                 )}
-              </div>
+              </motion.div>
             );
           })
         )}
@@ -162,6 +174,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="w-2 h-2 rounded-full bg-emerald-400 mx-auto" />
         )}
       </div>
-    </aside>
+    </motion.aside>
   );
 };

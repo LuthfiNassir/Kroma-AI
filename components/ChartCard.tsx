@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Maximize2 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -13,7 +14,6 @@ import {
   Cell,
   XAxis,
   YAxis,
-  ZAxis,
   Tooltip,
   CartesianGrid,
   AreaChart,
@@ -23,6 +23,7 @@ import {
   Treemap,
 } from "recharts";
 import { ChartDataSeries, ChartType } from "@/lib/types";
+import { cardEntrance, subtleHoverMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 interface ChartCardProps {
@@ -37,7 +38,7 @@ interface ChartCardProps {
 const COLOR_PALETTE = ["#FE6749", "#A5329E", "#FE88ED", "#FF9E88", "#7D2277", "#38BDF8", "#34D399"];
 
 // Custom SVG Renderer for Boxplot
-const CustomBoxPlotRenderer: React.FC<{ data: any[]; accentColor: string }> = ({ data, accentColor }) => {
+const CustomBoxPlotRenderer: React.FC<{ data: any[]; accentColor: string }> = ({ data }) => {
   if (!data || !Array.isArray(data) || data.length === 0) return null;
 
   return (
@@ -148,10 +149,11 @@ export const ChartCard: React.FC<ChartCardProps> = ({
   series,
   defaultType = "bar",
   accentColor = "#FE6749",
-  secondaryColor = "#A5329E",
   className,
   onClick,
 }) => {
+  const shouldReduceMotion = useReducedMotion();
+
   if (!series || !series.data || !Array.isArray(series.data) || series.data.length === 0) {
     return (
       <div
@@ -179,20 +181,24 @@ export const ChartCard: React.FC<ChartCardProps> = ({
   const totalPieVolume = series.data.reduce((acc, curr) => acc + (Number(curr[yKey]) || 0), 0);
 
   return (
-    <div
+    <motion.div
+      variants={cardEntrance}
+      {...(onClick && !shouldReduceMotion ? subtleHoverMotion : {})}
       onClick={onClick}
       className={cn(
-        "rounded-3xl bg-[#18191b] border border-white/10 p-6 min-h-[340px] flex flex-col justify-between shadow-xl relative overflow-hidden cursor-pointer hover:border-[#FE6749]/50 transition-all duration-200 group",
+        "rounded-3xl bg-[#18191b] border border-white/10 p-6 min-h-[340px] flex flex-col justify-between shadow-xl relative overflow-hidden transition-colors duration-200 group",
+        onClick && "cursor-pointer hover:border-[#FE6749]/50",
         className
       )}
     >
       {/* Hover Enlarge Indicator Badge */}
-      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-        <span className="rounded-full px-2.5 py-1 text-[10px] font-mono bg-[#FE6749] text-white shadow-md flex items-center gap-1">
-          <Maximize2 className="w-3 h-3" />
-          <span>[Click to Expand]</span>
-        </span>
-      </div>
+      {onClick && (
+        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+          <span className="rounded-full px-2.5 py-1 text-[10px] font-mono bg-[#FE6749] text-white shadow-md flex items-center gap-1">
+            <Maximize2 className="w-3 h-3" />
+          </span>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4 pr-16 group-hover:pr-28 transition-all">
@@ -209,8 +215,8 @@ export const ChartCard: React.FC<ChartCardProps> = ({
         </div>
       </div>
 
-      {/* Explicit Height Chart Canvas Container */}
-      <div className="w-full h-[220px] min-h-[220px] relative font-mono">
+      {/* Responsive Height Chart Canvas Container */}
+      <div className="w-full flex-1 min-h-[220px] relative font-mono">
         {chartType === "boxplot" ? (
           <CustomBoxPlotRenderer data={series.data} accentColor={accentColor} />
         ) : chartType === "heatmap" ? (
@@ -220,7 +226,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
             {chartType === "area" ? (
               <AreaChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 25 : 0 }}>
                 <defs>
-                  <linearGradient id="colorCoralCard" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id={`gradient_${series.id || "card"}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={accentColor} stopOpacity={0.8} />
                     <stop offset="95%" stopColor={accentColor} stopOpacity={0.0} />
                   </linearGradient>
@@ -251,7 +257,10 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   stroke={accentColor}
                   strokeWidth={3}
                   fillOpacity={1}
-                  fill="url(#colorCoralCard)"
+                  fill={`url(#gradient_${series.id || "card"})`}
+                  isAnimationActive={!shouldReduceMotion}
+                  animationDuration={500}
+                  animationEasing="ease-out"
                 />
               </AreaChart>
             ) : chartType === "line" ? (
@@ -283,6 +292,9 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   strokeWidth={3}
                   dot={{ fill: accentColor, r: 4 }}
                   activeDot={{ r: 6, fill: "#ffffff" }}
+                  isAnimationActive={!shouldReduceMotion}
+                  animationDuration={500}
+                  animationEasing="ease-out"
                 />
               </LineChart>
             ) : chartType === "pie" ? (
@@ -305,6 +317,9 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   innerRadius={45}
                   outerRadius={75}
                   paddingAngle={4}
+                  isAnimationActive={!shouldReduceMotion}
+                  animationDuration={500}
+                  animationEasing="ease-out"
                 >
                   {series.data.map((entry, index) => (
                     <Cell
@@ -331,7 +346,13 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                     fontSize: "12px",
                   }}
                 />
-                <Scatter data={series.data} fill={accentColor} />
+                <Scatter
+                  data={series.data}
+                  fill={accentColor}
+                  isAnimationActive={!shouldReduceMotion}
+                  animationDuration={500}
+                  animationEasing="ease-out"
+                />
               </ScatterChart>
             ) : chartType === "treemap" ? (
               <Treemap
@@ -341,6 +362,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                 aspectRatio={4 / 3}
                 stroke="#18191b"
                 fill={accentColor}
+                isAnimationActive={!shouldReduceMotion}
               />
             ) : (
               /* Default "bar" or "histogram" */
@@ -365,7 +387,14 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                     fontSize: "12px",
                   }}
                 />
-                <Bar dataKey={yKey} fill={accentColor} radius={[8, 8, 0, 0]} />
+                <Bar
+                  dataKey={yKey}
+                  fill={accentColor}
+                  radius={[8, 8, 0, 0]}
+                  isAnimationActive={!shouldReduceMotion}
+                  animationDuration={500}
+                  animationEasing="ease-out"
+                />
               </BarChart>
             )}
           </ResponsiveContainer>
@@ -394,6 +423,6 @@ export const ChartCard: React.FC<ChartCardProps> = ({
           })}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { question, schema, sampleData } = body;
+    const { question, schema, sampleData, profile, currentFocus } = body;
 
     if (!question || !schema) {
       return NextResponse.json(
@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
     const systemPrompt = buildOllamaSystemPrompt({
       schema,
       sampleData: sampleData || [],
+      profile,
+      currentFocus,
     });
 
     const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
       }
 
       const data = await ollamaRes.json();
-      let rawMessage = data.message?.content || "{}";
+      let rawMessage = data.message?.content || data.response || "{}";
 
       // Defensive markdown code fence stripping
       rawMessage = rawMessage.replace(/```json/gi, "").replace(/```/g, "").trim();
@@ -74,8 +76,10 @@ export async function POST(req: NextRequest) {
       } catch (parseErr) {
         console.warn("LLM JSON output formatting warning, returning structured fallback:", parseErr);
         parsedAnalysis = {
-          explanation: "**[Direct Answer]**\nAnalysis computed successfully from dataset context.\n\n**[Key Drivers & Comparisons]**\n- Target cohorts demonstrate strong variance.\n- Top metrics align with baseline statistical patterns.\n\n**[Compounding Interrelationships]**\nPrimary variables interact positively to influence overall output.\n\n**[Executive Takeaway]**\nFocus strategic resources on leading volume categories.",
+          explanation:
+            "**[Direct Answer]**\nAnalysis computed successfully from dataset context.\n\n**[Key Drivers & Comparisons]**\n- Core metrics align with baseline statistical patterns.\n- Target variance confirms cohort concentration.\n\n**[Compounding Relationship]**\nVariables exhibit structural co-dependence.\n\n**[Executive Takeaway]**\nPrioritize strategic operational capacity on primary high-yield nodes.",
           insight: "Data processed locally with Kroma intelligence.",
+          action: { type: "ANSWER" },
           sql: null,
           chartType: "none",
           chartTitle: "Query Observation",

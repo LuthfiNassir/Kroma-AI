@@ -1,8 +1,17 @@
+"use client";
+
 import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ChevronDown, ChevronUp, Code, Sparkles, Terminal, BarChart2, Send, AlertTriangle } from "lucide-react";
 import { ChatMessage } from "@/lib/types";
 import { ChartCard } from "./ChartCard";
 import { BrandMark } from "@/components/ui/BrandMark";
+import {
+  chatMessageUser,
+  chatMessageAssistant,
+  buttonTapMotion,
+  bannerSlideDown,
+} from "@/lib/motion";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -93,6 +102,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   isLoading,
   suggestions,
 }) => {
+  const shouldReduceMotion = useReducedMotion();
   const [openSqlId, setOpenSqlId] = useState<string | null>(null);
   const [inputPrompt, setInputPrompt] = useState("");
   const [activeSuggestions, setActiveSuggestions] = useState<string[]>([]);
@@ -157,139 +167,177 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             </p>
           </div>
         ) : (
-          messages.map((msg) => {
-            const isUser = msg.role === "user";
+          <AnimatePresence initial={false}>
+            {messages.map((msg) => {
+              const isUser = msg.role === "user";
 
-            if (isUser) {
-              return (
-                <div key={msg.id} className="flex justify-end">
-                  <div className="rounded-2xl rounded-tr-sm bg-white/10 border border-white/15 px-4 py-2.5 text-sm text-white max-w-[80%] shadow-sm font-sans">
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
-                    <span className="text-[9px] text-white/40 block text-right mt-1 font-mono">
-                      {msg.timestamp}
-                    </span>
-                  </div>
-                </div>
-              );
-            }
-
-            // Error Bubble
-            if (msg.isError) {
-              return (
-                <div key={msg.id} className="flex justify-start">
-                  <div className="rounded-2xl bg-red-500/10 border border-red-500/30 p-4 text-xs text-red-300 space-y-2 max-w-[90%] shadow-xl font-mono">
-                    <div className="flex items-center gap-2 text-red-400 font-semibold uppercase tracking-wider">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>[Kroma Engine Error]</span>
-                    </div>
-                    <p className="leading-relaxed">{msg.content}</p>
-                    <span className="text-[9px] text-red-400/50 block text-right">
-                      {msg.timestamp}
-                    </span>
-                  </div>
-                </div>
-              );
-            }
-
-            const isSqlOpen = openSqlId === msg.id;
-
-            return (
-              <div key={msg.id} className="flex justify-start">
-                <div className="rounded-2xl bg-[#18191b] border border-white/10 p-4 text-sm text-white space-y-3.5 max-w-[90%] md:max-w-[85%] shadow-xl">
-                  {/* Assistant Header */}
-                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                    <div className="flex items-center gap-2">
-                      <BrandMark className="w-4 h-4" />
-                      <span className="text-xs font-bold text-white tracking-tight">
-                        [Kroma Intelligence]
-                      </span>
-                      <span className="rounded-full px-2 py-0.5 text-[9px] font-mono bg-[#A5329E]/30 text-[#FE88ED] border border-[#A5329E]/50">
-                        Qwen 2.5 Coder
+              if (isUser) {
+                return (
+                  <motion.div
+                    key={msg.id}
+                    variants={shouldReduceMotion ? undefined : chatMessageUser}
+                    initial={shouldReduceMotion ? undefined : "hidden"}
+                    animate={shouldReduceMotion ? undefined : "visible"}
+                    className="flex justify-end"
+                  >
+                    <div className="rounded-2xl rounded-tr-sm bg-white/10 border border-white/15 px-4 py-2.5 text-sm text-white max-w-[80%] shadow-sm font-sans">
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      <span className="text-[9px] text-white/40 block text-right mt-1 font-mono">
+                        {msg.timestamp}
                       </span>
                     </div>
-                    <span className="text-[10px] text-white/40 font-mono">
-                      {msg.timestamp}
-                    </span>
-                  </div>
+                  </motion.div>
+                );
+              }
 
-                  {/* Main Formatted Explanation */}
-                  <FormattedMarkdown content={msg.content} />
-
-                  {/* Inline Question-Specific Chart */}
-                  {msg.inlineChart && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#FE6749] uppercase tracking-wider">
-                        <BarChart2 className="w-3.5 h-3.5" />
-                        <span>[Multi-Cohort Comparison]</span>
+              // Error Bubble
+              if (msg.isError) {
+                return (
+                  <motion.div
+                    key={msg.id}
+                    variants={shouldReduceMotion ? undefined : chatMessageAssistant}
+                    initial={shouldReduceMotion ? undefined : "hidden"}
+                    animate={shouldReduceMotion ? undefined : "visible"}
+                    className="flex justify-start"
+                  >
+                    <div className="rounded-2xl bg-red-500/10 border border-red-500/30 p-4 text-xs text-red-300 space-y-2 max-w-[90%] shadow-xl font-mono">
+                      <div className="flex items-center gap-2 text-red-400 font-semibold uppercase tracking-wider">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>[Kroma Engine Error]</span>
                       </div>
-                      <ChartCard
-                        series={msg.inlineChart}
-                        defaultType={msg.inlineChart.type || "bar"}
-                        accentColor="#FE6749"
-                        secondaryColor="#A5329E"
-                        className="min-h-[280px] p-4 bg-[#212222] border-white/10 cursor-default"
-                      />
+                      <p className="leading-relaxed">{msg.content}</p>
+                      <span className="text-[9px] text-red-400/50 block text-right">
+                        {msg.timestamp}
+                      </span>
                     </div>
-                  )}
+                  </motion.div>
+                );
+              }
 
-                  {/* Executive Takeaway Banner */}
-                  {msg.insight && (
-                    <div className="rounded-xl bg-[#A5329E]/10 border-l-2 border-[#A5329E] p-3 text-xs text-white/90 flex items-start gap-2">
-                      <Sparkles className="w-4 h-4 text-[#A5329E] shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-semibold text-[#FE88ED] block text-[11px] uppercase tracking-wider mb-0.5 font-mono">
-                          [Executive Takeaway]
+              const isSqlOpen = openSqlId === msg.id;
+
+              return (
+                <motion.div
+                  key={msg.id}
+                  variants={shouldReduceMotion ? undefined : chatMessageAssistant}
+                  initial={shouldReduceMotion ? undefined : "hidden"}
+                  animate={shouldReduceMotion ? undefined : "visible"}
+                  className="flex justify-start"
+                >
+                  <div className="rounded-2xl bg-[#18191b] border border-white/10 p-4 text-sm text-white space-y-3.5 max-w-[90%] md:max-w-[85%] shadow-xl">
+                    {/* Assistant Header */}
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-2">
+                        <BrandMark className="w-4 h-4" />
+                        <span className="text-xs font-bold text-white tracking-tight">
+                          [Kroma Intelligence]
                         </span>
-                        <p className="text-white/80">{msg.insight}</p>
+                        <span className="rounded-full px-2 py-0.5 text-[9px] font-mono bg-[#A5329E]/30 text-[#FE88ED] border border-[#A5329E]/50">
+                          Qwen 2.5 Coder
+                        </span>
                       </div>
+                      <span className="text-[10px] text-white/40 font-mono">
+                        {msg.timestamp}
+                      </span>
                     </div>
-                  )}
 
-                  {/* Collapsible SQL Block */}
-                  {msg.sqlQuery && (
-                    <div className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleSql(msg.id)}
-                        className="rounded-lg px-2.5 py-1 text-[11px] font-mono bg-white/5 border border-white/10 text-white/70 hover:text-white flex items-center gap-2 transition cursor-pointer"
-                      >
-                        <Code className="w-3 h-3 text-[#FE6749]" />
-                        <span>[DuckDB SQL Query]</span>
-                        {isSqlOpen ? (
-                          <ChevronUp className="w-3 h-3 ml-auto" />
-                        ) : (
-                          <ChevronDown className="w-3 h-3 ml-auto" />
-                        )}
-                      </button>
+                    {/* Main Formatted Explanation */}
+                    <FormattedMarkdown content={msg.content} />
 
-                      {isSqlOpen && (
-                        <div className="rounded-xl bg-[#0e0f11] border border-white/10 p-3 font-mono text-xs text-white/70 overflow-x-auto">
-                          <div className="flex items-center justify-between text-[10px] text-white/40 mb-1 border-b border-white/5 pb-1">
-                            <span>[SQL Syntax]</span>
-                            <Terminal className="w-3 h-3" />
-                          </div>
-                          <pre className="text-emerald-400 font-mono text-[11px] whitespace-pre-wrap">
-                            {msg.sqlQuery}
-                          </pre>
+                    {/* Inline Question-Specific Chart */}
+                    {msg.inlineChart && (
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#FE6749] uppercase tracking-wider">
+                          <BarChart2 className="w-3.5 h-3.5" />
+                          <span>[Multi-Cohort Comparison]</span>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
+                        <ChartCard
+                          series={msg.inlineChart}
+                          defaultType={msg.inlineChart.type || "bar"}
+                          accentColor="#FE6749"
+                          secondaryColor="#A5329E"
+                          className="min-h-[280px] p-4 bg-[#212222] border-white/10 cursor-default"
+                        />
+                      </div>
+                    )}
+
+                    {/* Executive Takeaway Banner */}
+                    {msg.insight && (
+                      <div className="rounded-xl bg-[#A5329E]/10 border-l-2 border-[#A5329E] p-3 text-xs text-white/90 flex items-start gap-2">
+                        <Sparkles className="w-4 h-4 text-[#A5329E] shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-semibold text-[#FE88ED] block text-[11px] uppercase tracking-wider mb-0.5 font-mono">
+                            [Executive Takeaway]
+                          </span>
+                          <p className="text-white/80">{msg.insight}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Collapsible SQL Block */}
+                    {msg.sqlQuery && (
+                      <div className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleSql(msg.id)}
+                          className="rounded-lg px-2.5 py-1 text-[11px] font-mono bg-white/5 border border-white/10 text-white/70 hover:text-white flex items-center gap-2 transition cursor-pointer"
+                        >
+                          <Code className="w-3 h-3 text-[#FE6749]" />
+                          <span>[DuckDB SQL Query]</span>
+                          {isSqlOpen ? (
+                            <ChevronUp className="w-3 h-3 ml-auto" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3 ml-auto" />
+                          )}
+                        </button>
+
+                        <AnimatePresence>
+                          {isSqlOpen && (
+                            <motion.div
+                              variants={bannerSlideDown}
+                              initial="hidden"
+                              animate="visible"
+                              exit="exit"
+                              className="overflow-hidden"
+                            >
+                              <div className="rounded-xl bg-[#0e0f11] border border-white/10 p-3 font-mono text-xs text-white/70 overflow-x-auto">
+                                <div className="flex items-center justify-between text-[10px] text-white/40 mb-1 border-b border-white/5 pb-1">
+                                  <span>[SQL Syntax]</span>
+                                  <Terminal className="w-3 h-3" />
+                                </div>
+                                <pre className="text-emerald-400 font-mono text-[11px] whitespace-pre-wrap">
+                                  {msg.sqlQuery}
+                                </pre>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         )}
 
         {/* Loading Indicator */}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl bg-[#18191b] border border-[#FE6749]/40 p-3.5 text-xs text-[#FE6749] flex items-center gap-2.5 animate-pulse font-mono shadow-lg">
-              <Sparkles className="w-4 h-4 animate-spin" />
-              <span>[Kroma is analyzing your dataset with Qwen 2.5 Coder...]</span>
-            </div>
-          </div>
-        )}
+        <AnimatePresence>
+          {isLoading && (
+            <motion.div
+              variants={chatMessageAssistant}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="flex justify-start"
+            >
+              <div className="rounded-2xl bg-[#18191b] border border-[#FE6749]/40 p-3.5 text-xs text-[#FE6749] flex items-center gap-2.5 animate-pulse font-mono shadow-lg">
+                <Sparkles className="w-4 h-4 animate-spin" />
+                <span>[Kroma is analyzing your dataset with Qwen 2.5 Coder...]</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Scroll End Anchor */}
         <div ref={messagesEndRef} className="h-6 shrink-0" />
@@ -300,20 +348,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         {/* Dynamic Dataset Suggestion Chips */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {activeSuggestions.map((s, i) => (
-            <button
+            <motion.button
+              {...(shouldReduceMotion ? {} : buttonTapMotion)}
               key={i}
               type="button"
               onClick={() => handleSend(s)}
               disabled={isLoading}
-              className="rounded-full px-3 py-1 bg-white/5 border border-white/10 hover:border-[#FE6749]/60 text-xs text-white/80 whitespace-nowrap transition cursor-pointer disabled:opacity-50 font-mono"
+              className="rounded-full px-3 py-1 bg-white/5 border border-white/10 hover:border-[#FE6749]/60 text-xs text-white/80 whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 font-mono"
             >
               {s}
-            </button>
+            </motion.button>
           ))}
         </div>
 
         {/* AI Composer Box */}
-        <div className="rounded-2xl bg-[#18191b] border border-white/15 p-3 focus-within:border-[#A5329E]/60 transition shadow-2xl">
+        <div className="rounded-2xl bg-[#18191b] border border-white/15 p-3 focus-within:border-[#FE6749]/60 transition-colors shadow-2xl">
           <textarea
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
@@ -327,11 +376,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             <span className="text-[11px] text-white/40 font-mono">
               [Kroma Local Engine / Qwen 2.5 Coder]
             </span>
-            <button
+            <motion.button
+              {...(shouldReduceMotion ? {} : buttonTapMotion)}
               type="button"
               onClick={() => handleSend()}
               disabled={!inputPrompt.trim() || isLoading}
-              className="rounded-xl bg-[#FE6749] text-white px-4 py-1.5 text-xs font-semibold hover:bg-[#e85a3c] transition flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="rounded-xl bg-[#FE6749] text-white px-4 py-1.5 text-xs font-semibold hover:bg-[#e85a3c] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <span>[Analyzing...]</span>
@@ -341,7 +391,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                   <Send className="w-3 h-3" />
                 </>
               )}
-            </button>
+            </motion.button>
           </div>
         </div>
       </div>
