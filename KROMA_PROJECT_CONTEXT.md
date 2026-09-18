@@ -223,7 +223,7 @@ Kroma follows a **Dark Editorial Creative-Tech** visual identity.
 ```text
 Canvas Background:  #212222   (Main deep dark canvas)
 Surface / Card:     #18191b   (Frosted Bento containers and modals)
-Electric Coral:     #FE6749   (Primary brand accent, hero series, primary CTAs)
+Primary Coral:      #C86342   (Canonical brand accent, hero series, primary CTAs)
 Velvet Orchid:      #A5329E   (Secondary series, comparisons, scenario badges)
 Text Primary:       #FFFFFF   (Headings, primary metrics, high contrast)
 Text Muted:         rgba(255, 255, 255, 0.55)  (Labels, axis markers, subtext)
@@ -344,7 +344,7 @@ npm run lint
 3. **Deterministic Authority:** Numerical calculations, correlations, distributions, and capabilities are decided deterministically in TypeScript. The LLM interprets facts, it does not invent them.
 4. **Decoupled Chat Invariant:** Conversational queries generate inline responses inside the chat thread without wiping the Bento dashboard.
 5. **Zero-Emoji Policy:** Absolutely no emojis in any UI, button, label, chart, error state, or generated text.
-6. **Strict Design Palette:** Only use the approved brand colors (`#212222`, `#18191b`, `#FE6749`, `#A5329E`, `#FFFFFF`).
+6. **Strict Design Palette:** Only use the approved brand colors (`#212222`, `#18191b`, `#C86342`, `#A5329E`, `#FFFFFF`).
 7. **Cardinality Safeguard:** Donut / Pie charts are strictly forbidden for categorical variables with $> 6$ unique values.
 8. **Conditional Forecasting:** Never generate a forecast unless a continuous temporal dimension with $\ge 6$ historical observations is validated.
 9. **Safe Imputation:** Additive metrics must be imputed with `0`; non-additive metrics with the **median**.
@@ -378,7 +378,17 @@ npm run lint
 - **Decision:** Enforced "Watermelon UI" Dark Editorial Creative-Tech design system.
   - **Reason:** Previous SaaS-style light dashboard lacked premium executive weight and distinct product identity.
   - **Affected Files:** [`app/globals.css`](file:///c:/Users/luthf/Downloads/DataAnalyst/app/globals.css), [`tailwind.config.js`](file:///c:/Users/luthf/Downloads/DataAnalyst/tailwind.config.js), [`components/`](file:///c:/Users/luthf/Downloads/DataAnalyst/components/)
-  - **Impact:** Unified all surfaces around `#212222` canvas, `#18191b` cards, `#FE6749` coral accents, `#A5329E` orchid accents, noise textures, and bracketed monospace tags.
+  - **Impact:** Unified all surfaces around `#212222` canvas, `#18191b` cards, `#C86342` coral accents, `#A5329E` orchid accents, noise textures, and bracketed monospace tags.
+
+- **Decision: Canonical Brand Coral Accent Update (#C86342) & Sidebar Interaction Refactor**
+  - **Date:** 2026-09-18
+  - **Reason:** Updated brand palette to canonical coral `#C86342` and refined sidebar collapsed interaction to eliminate redundant arrow buttons, using the centered Kroma logo exclusively to expand the sidebar.
+  - **Affected Files:** [`tailwind.config.js`](file:///c:/Users/luthf/Downloads/DataAnalyst/tailwind.config.js), [`app/globals.css`](file:///c:/Users/luthf/Downloads/DataAnalyst/app/globals.css), [`components/Sidebar.tsx`](file:///c:/Users/luthf/Downloads/DataAnalyst/components/Sidebar.tsx), [`components/`](file:///c:/Users/luthf/Downloads/DataAnalyst/components/)
+  - **Impact:**
+    - Canonical coral accent is `#C86342` across all styles, arbitrary Tailwind classes, Recharts stroke/fill, and focus rings.
+    - Collapsed sidebar contains only the centered Kroma logo (`h-[60px]`); arrow button is completely removed.
+    - Collapsed logo click expands sidebar without navigating away from the active session.
+    - Expanded logo click navigates to landing page while preserving session history safely.
 
 - **ADR-007: Resolution of Runtime "Cannot find module './276.js'" & UI Rendering Crashes**
   - **Status:** Accepted & Implemented
@@ -471,8 +481,8 @@ Data Engine:             Modular Dataset Intelligence (Profiling, Relationships,
 Local LLM Runtime:       Ollama (http://127.0.0.1:11434 / qwen2.5-coder:7b)
 Visual Direction:        Watermelon UI (Dark Editorial Creative-Tech)
 Emoji Policy:            STRICT ZERO EMOJIS
-Primary Brand Colors:    Canvas #212222, Card #18191b, Coral #FE6749, Orchid #A5329E, White #FFFFFF
-Last Context Update:     2026-09-17 (Engine v2 Upgrade)
+Primary Brand Colors:    Canvas #212222, Card #18191b, Coral #C86342, Orchid #A5329E, White #FFFFFF
+Last Context Update:     2026-09-18 (Brand Accent #C86342 & Sidebar Interaction)
 ```
 
 ---
@@ -509,3 +519,48 @@ When encountering conflicting requirements or instructions, resolve in the follo
 4. Older specification / planning documents
 5. AI assumptions (lowest priority)
 ```
+
+---
+
+## 18. Frontend Build & Styling Invariants
+
+### 18.1 Root Cause Analysis: Dev Server / Build Cache Collision
+A critical styling breakdown previously occurred where the browser rendered raw, unstyled HTML (white background, serif fonts, no CSS). The exact root cause:
+1. A background `next dev` server process was running while a separate task executed `npm run build` (`next build`).
+2. Next.js's production build wiped and regenerated the `.next/` directory with production hashes.
+3. The running development server in memory attempted to serve development bundles (`/_next/static/css/app/layout.css` and `/_next/static/chunks/main-app.js`) that had been clobbered on disk, returning **HTTP 404** for all stylesheet and script requests.
+4. **Permanent Invariant Rule:** Never run `npm run build` while `next dev` is running concurrently in the same workspace. If `.next` ever desynchronizes or returns 404 for CSS chunks, stop the server, execute `Remove-Item -Recurse -Force .next`, and restart `npm run dev` (or use `npm run dev:clean`).
+
+### 18.2 Core Styling Architecture
+- **Global Stylesheet Location:** [`app/globals.css`](file:///c:/Users/luthf/Downloads/DataAnalyst/app/globals.css) is the single authoritative global stylesheet containing `@tailwind base; @tailwind components; @tailwind utilities;` alongside custom Kroma CSS variables (`--bg-canvas`, `--bg-surface`, `--accent-coral`, `--accent-purple`).
+- **Stylesheet Import:** Exclusively imported in [`app/layout.tsx`](file:///c:/Users/luthf/Downloads/DataAnalyst/app/layout.tsx). It must NEVER be imported in individual components or sub-routes.
+- **Tailwind Content Paths:** Configured in [`tailwind.config.js`](file:///c:/Users/luthf/Downloads/DataAnalyst/tailwind.config.js) scanning:
+  - `./app/**/*.{js,ts,jsx,tsx,mdx}`
+  - `./pages/**/*.{js,ts,jsx,tsx,mdx}`
+  - `./components/**/*.{js,ts,jsx,tsx,mdx}`
+  - `./lib/**/*.{js,ts,jsx,tsx,mdx}`
+- **PostCSS Wiring:** [`postcss.config.js`](file:///c:/Users/luthf/Downloads/DataAnalyst/postcss.config.js) maps standard `tailwindcss` and `autoprefixer`.
+- **Static Export & Desktop Target:** [`next.config.mjs`](file:///c:/Users/luthf/Downloads/DataAnalyst/next.config.mjs) must always maintain `output: "export"`, `images: { unoptimized: true }`, and `trailingSlash: true` for Tauri v2 compatibility (`src-tauri/tauri.conf.json` maps `frontendDist: "../out"` and `devUrl: "http://localhost:3000"`).
+
+### 18.3 Analytical Chart Viewport & Trackpad Zoom Engine
+- **True Analytical Domain Zoom:** Built in [`lib/zoomEngine.ts`](file:///c:/Users/luthf/Downloads/DataAnalyst/lib/zoomEngine.ts) with `ChartViewport` (`zoom`, `startIndex`, `endIndex`, `xDomain`, `yDomain`). Zooming recalculates the visible data window and axes minimum/maximum ticks; it strictly avoids CSS `transform: scale`.
+- **Pointer-Anchored Focal Tracking:** Calculates `anchorRatioX = (clientX - rect.left) / rect.width`. The data point directly under the pointer remains anchored under the pointer during trackpad pinch or mouse wheel operations.
+- **Scoped Gesture Listener:** The non-passive wheel event listener is attached strictly to the inner chart plotting container DOM element (`chartCanvasRef`) inside [`components/ChartModal.tsx`](file:///c:/Users/luthf/Downloads/DataAnalyst/components/ChartModal.tsx). It calls `e.preventDefault()` only within the plotting canvas to block outer browser page zoom while allowing normal scrolling outside the canvas.
+- **Shared Viewport State:** Manual buttons (`[-]`, `[+]`, `[Reset]`), pan arrows, drag gestures, and trackpad gestures all mutate the identical `ChartViewport` state.
+- **Dashboard Isolation:** All zoom state is modal-local. When closing the modal, dashboard charts remain completely unaffected at baseline scale.
+
+### 18.4 Sidebar Header & Navigation Invariants
+- **Collapsed Sidebar (`80px` width):** Contains ONLY the horizontally centered Kroma BrandMark logo inside `h-[60px]`, matching the top navigation bar height. The separate expand arrow button (`>`) has been **completely removed**.
+- **Collapsed Logo Click Behavior:** Clicking the Kroma logo when the sidebar is collapsed **expands/opens the sidebar** (`onToggleOpen`). It does **NOT** navigate away from the current session or call `handleNavigateHome()`. The active analysis dashboard and session state remain untouched and visible.
+- **Expanded Sidebar (`288px` width):** Displays `[BrandMark + Title] [ChevronLeft]` in the header. Clicking the logo navigates to the landing page (`handleNavigateHome()`). Clicking `ChevronLeft` collapses the sidebar.
+- **Session Safety Invariant:** Clicking the logo **never** deletes a session, never clears session history, and never resets the dataset. All active sessions are preserved in Session History and can be restored at any time.
+- **Smooth Motion:** Sidebar width transitions smoothly between `80px` and `288px` using Framer Motion with cubic-bezier easing (`[0.16, 1, 0.3, 1]`), fully respecting user reduced-motion preferences.
+
+### 18.5 Bento Grid Zero-Whitespace Guarantee
+- In [`components/BentoGrid.tsx`](file:///c:/Users/luthf/Downloads/DataAnalyst/components/BentoGrid.tsx), card spans dynamically adapt:
+  - 1 Chart: Chart (8 cols) + Highlights (4 cols) = 12 cols
+  - 2 Charts: Chart 0 (8) + Chart 1 (4) = 12 cols (Row 1); Highlights = 12 cols (Row 2)
+  - 3 Charts: Chart 0 (8) + Chart 1 (4) = 12 cols (Row 1); Chart 2 (6) + Highlights (6) = 12 cols (Row 2)
+  - 4 Charts: Chart 0 (8) + Chart 1 (4) = 12 cols (Row 1); Chart 2 (4) + Chart 3 (4) + Highlights (4) = 12 cols (Row 2)
+- Every row mathematically sums to 12 columns, eliminating blank rectangles and unused whitespace.
+

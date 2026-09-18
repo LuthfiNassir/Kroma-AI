@@ -81,12 +81,12 @@ export function Tiles({ className, cellSize = 56 }: TilesProps) {
             // - 1.5 < dist <= 2.2: Outer perimeter squares (Subtle border highlight)
             if (dist < 0.8) {
               el.style.transition = "background-color 0.05s ease-out, border-color 0.05s ease-out";
-              el.style.backgroundColor = "rgba(254, 103, 73, 0.22)";
-              el.style.borderColor = "rgba(254, 103, 73, 0.45)";
+              el.style.backgroundColor = "rgba(200, 99, 66, 0.22)";
+              el.style.borderColor = "rgba(200, 99, 66, 0.45)";
             } else if (dist <= 1.45) {
               el.style.transition = "background-color 0.08s ease-out, border-color 0.08s ease-out";
               el.style.backgroundColor = "rgba(165, 50, 158, 0.12)";
-              el.style.borderColor = "rgba(254, 103, 73, 0.24)";
+              el.style.borderColor = "rgba(200, 99, 66, 0.24)";
             } else {
               el.style.transition = "background-color 0.12s ease-out, border-color 0.12s ease-out";
               el.style.backgroundColor = "rgba(165, 50, 158, 0.05)";

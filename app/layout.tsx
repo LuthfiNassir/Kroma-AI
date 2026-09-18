@@ -44,7 +44,7 @@ export default function RootLayout({
       lang="en"
       className={`dark ${inter.variable} ${outfit.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="bg-[#212222] text-white antialiased selection:bg-[#FE6749]/30 selection:text-white">
+      <body className="bg-[#212222] text-white antialiased selection:bg-[#C86342]/30 selection:text-white">
         {children}
       </body>
     </html>

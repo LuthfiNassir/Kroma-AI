@@ -76,7 +76,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 {...buttonTapMotion}
                 type="button"
                 onClick={this.handleRetry}
-                className="rounded-xl bg-[#FE6749] text-white px-5 py-2 text-xs font-semibold hover:bg-[#e85a3c] transition-colors flex items-center gap-2 cursor-pointer font-mono shadow-md"
+                className="rounded-xl bg-[#C86342] text-white px-5 py-2 text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-2 cursor-pointer font-mono shadow-md"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>[Retry Analytics]</span>

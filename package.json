@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:clean": "rimraf .next && next dev",
+    "dev:clean": "rimraf .next .next-dev && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "check:assets": "node scripts/verify-assets.mjs",
     "tauri": "tauri",
-    "desktop:clean": "rimraf src-tauri/target out .next",
+    "desktop:clean": "rimraf src-tauri/target out .next .next-dev",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build"
   },

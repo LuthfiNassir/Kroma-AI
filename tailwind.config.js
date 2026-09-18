@@ -17,7 +17,7 @@ module.exports = {
         brand: {
           canvas: "#212222",
           card: "#18191b",
-          coral: "#FE6749",
+          coral: "#C86342",
           purple: "#A5329E",
         },
       },

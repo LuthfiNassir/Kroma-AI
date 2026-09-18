@@ -8,8 +8,9 @@ import { ChartCard } from "./ChartCard";
 import { WhatIfWidget } from "./WhatIfWidget";
 import { DataTable } from "./DataTable";
 import { DatasetSummaryCard } from "./DatasetSummaryCard";
-import { staggerContainer, cardEntrance, slideUp, subtleHoverMotion } from "@/lib/motion";
+import { staggerContainer, cardEntrance, subtleHoverMotion } from "@/lib/motion";
 import { Sparkles, Activity } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface BentoGridProps {
   dashboardState: DashboardState;
@@ -90,7 +91,7 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
       >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/5 pb-3">
           <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#FE6749] inline-block animate-pulse" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#C86342] inline-block animate-pulse" />
             <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
               [{profileType || "DATASET INTELLIGENCE"} PROFILE CANVAS]
             </span>
@@ -103,14 +104,14 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
 
           <div className="flex items-center gap-2 flex-wrap">
             <span className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/70">
-              {tableData.length} records • {columns.length} attributes
+              {tableData.length} records · {columns.length} attributes
             </span>
             {profile?.temporal.hasTemporal && (
               <span className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/70">
                 {profile.temporal.observationCount} {profile.temporal.frequency} periods
               </span>
             )}
-            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-[#FE6749]">
+            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-[#C86342]">
               [{charts.length} Visual Perspectives]
             </span>
           </div>
@@ -138,17 +139,10 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
         </div>
       </motion.div>
 
-      {/* 2. PRIMARY SOURCE DATASET TABLE */}
-      <DataTable
-        columns={columns}
-        data={tableData}
-        sourceType={dashboardState.sourceType}
-      />
-
-      {/* 3. TOP EXECUTIVE KPI ROW */}
+      {/* 2. TOP EXECUTIVE KPI ROW */}
       <motion.div
         variants={staggerContainer(0.04, 0.02)}
-        className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3.5"
       >
         {kpis.slice(0, 4).map((kpi, idx) => (
           <div key={idx} className="min-w-0">
@@ -157,78 +151,129 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
         ))}
       </motion.div>
 
-      {/* 4. AUTONOMOUS ARCHETYPE BENTO GRID (VISUAL ANALYSIS) */}
+      {/* 3. AUTONOMOUS ARCHETYPE BENTO GRID (RESPONSIVE BALANCED PERSPECTIVES) */}
       <motion.div
         variants={staggerContainer(0.05, 0.02)}
         className="grid grid-cols-1 md:grid-cols-12 gap-4"
       >
         {charts.map((chartWidget, idx) => {
-          let colSpanClass = "md:col-span-6";
+          // Compute adaptive column span so every row sums to exactly 12 columns
+          let colSpanClass = "md:col-span-6 lg:col-span-6";
+          const totalCharts = charts.length;
 
-          if (idx === 0) {
-            colSpanClass = "md:col-span-8";
-          } else if (idx === 1 || chartWidget.type === "pie") {
-            colSpanClass = "md:col-span-4";
-          } else if (chartWidget.type === "area" || idx % 5 === 0) {
-            colSpanClass = "md:col-span-6";
+          if (totalCharts === 1) {
+            colSpanClass = "md:col-span-12 lg:col-span-8";
+          } else if (totalCharts === 2) {
+            colSpanClass = idx === 0 ? "md:col-span-12 lg:col-span-8" : "md:col-span-12 lg:col-span-4";
+          } else if (totalCharts === 3) {
+            if (idx === 0) colSpanClass = "md:col-span-12 lg:col-span-8";
+            else if (idx === 1) colSpanClass = "md:col-span-12 lg:col-span-4";
+            else colSpanClass = "md:col-span-12 lg:col-span-6"; // Pairs with 6-col highlightsCard
+          } else if (totalCharts === 4) {
+            if (idx === 0) colSpanClass = "md:col-span-12 lg:col-span-8";
+            else if (idx === 1) colSpanClass = "md:col-span-12 lg:col-span-4";
+            else colSpanClass = "md:col-span-6 lg:col-span-4"; // 4 + 4 + 4 with highlightsCard
+          } else {
+            // 5 or more charts
+            if (idx === 0) colSpanClass = "md:col-span-12 lg:col-span-8";
+            else if (idx === 1) colSpanClass = "md:col-span-12 lg:col-span-4";
+            else colSpanClass = "md:col-span-6 lg:col-span-6";
           }
+
+          const isHero = idx === 0;
 
           return (
             <div key={chartWidget.id || `widget_${idx}`} className={colSpanClass}>
               <ChartCard
                 series={chartWidget}
                 defaultType={chartWidget.type || "bar"}
-                accentColor={idx % 2 === 0 ? "#FE6749" : "#A5329E"}
-                secondaryColor={idx % 2 === 0 ? "#A5329E" : "#FE6749"}
-                className="h-full min-h-[340px]"
+                accentColor={idx % 2 === 0 ? "#C86342" : "#A5329E"}
+                secondaryColor={idx % 2 === 0 ? "#A5329E" : "#C86342"}
+                className={cn("h-full", isHero ? "min-h-[360px]" : "min-h-[330px]")}
                 onClick={() => onSelectChart && onSelectChart(chartWidget)}
               />
             </div>
           );
         })}
 
-        {/* HIGHLIGHTS SUMMARY CARD */}
-        <motion.div
-          variants={cardEntrance}
-          {...(shouldReduceMotion ? {} : subtleHoverMotion)}
-          className="md:col-span-6 rounded-3xl bg-[#18191b] border border-white/10 p-5 flex flex-col justify-between shadow-xl relative overflow-hidden"
-        >
-          <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2.5">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#FE6749]" />
-              <h3 className="text-sm font-semibold text-white tracking-tight uppercase font-mono">
-                {highlightsCard?.title || "[Executive Intelligence Summary]"}
-              </h3>
-            </div>
-            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/60">
-              [{highlightItems.length} Metrics]
-            </span>
-          </div>
+        {/* HIGHLIGHTS / EXECUTIVE INTELLIGENCE SUMMARY CARD (Fills row to exactly 12 columns) */}
+        {(() => {
+          const totalCharts = charts.length;
+          let hlColSpan = "md:col-span-12 lg:col-span-12";
+          let isFullWidth = false;
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-auto">
-            {highlightItems.map((item, idx) => (
-              <div
-                key={idx}
-                className="rounded-2xl bg-white/[0.03] border border-white/5 p-3.5 flex flex-col justify-between space-y-1"
-              >
-                <span className="text-[10px] font-mono text-white/50 uppercase truncate">
-                  {item.label}
+          if (totalCharts === 0) {
+            hlColSpan = "md:col-span-12 lg:col-span-12";
+            isFullWidth = true;
+          } else if (totalCharts === 1) {
+            hlColSpan = "md:col-span-12 lg:col-span-4";
+          } else if (totalCharts === 2) {
+            hlColSpan = "md:col-span-12 lg:col-span-12";
+            isFullWidth = true;
+          } else if (totalCharts === 3) {
+            hlColSpan = "md:col-span-12 lg:col-span-6"; // 6 + 6 = 12 with chart[2]
+          } else if (totalCharts === 4) {
+            hlColSpan = "md:col-span-12 lg:col-span-4"; // 4 + 4 + 4 = 12 with chart[2] and chart[3]
+          } else {
+            hlColSpan = totalCharts % 2 === 1 ? "md:col-span-12 lg:col-span-6" : "md:col-span-12 lg:col-span-12";
+            isFullWidth = totalCharts % 2 === 0;
+          }
+
+          return (
+            <motion.div
+              variants={cardEntrance}
+              {...(shouldReduceMotion ? {} : subtleHoverMotion)}
+              className={cn(
+                "rounded-3xl bg-[#18191b] border border-white/10 p-5 flex flex-col justify-between shadow-xl relative overflow-hidden",
+                hlColSpan,
+                isFullWidth ? "min-h-[170px]" : "min-h-[330px]"
+              )}
+            >
+              <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#C86342]" />
+                  <h3 className="text-sm font-semibold text-white tracking-tight uppercase font-mono">
+                    {highlightsCard?.title || "[Executive Intelligence Summary]"}
+                  </h3>
+                </div>
+                <span className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/60">
+                  [{highlightItems.length} Metrics]
                 </span>
-                <span className="text-base font-bold text-white font-mono tracking-tight truncate">
-                  {item.value}
-                </span>
-                {item.subtext && (
-                  <span className="text-[10px] font-mono text-white/40 truncate">
-                    {item.subtext}
-                  </span>
-                )}
               </div>
-            ))}
-          </div>
-        </motion.div>
+
+              <div
+                className={cn(
+                  "gap-3 my-auto",
+                  isFullWidth
+                    ? "grid grid-cols-2 md:grid-cols-4"
+                    : "grid grid-cols-1 sm:grid-cols-2"
+                )}
+              >
+                {highlightItems.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-2xl bg-white/[0.03] border border-white/5 p-3.5 flex flex-col justify-between space-y-1"
+                  >
+                    <span className="text-[10px] font-mono text-white/50 uppercase truncate">
+                      {item.label}
+                    </span>
+                    <span className="text-base font-bold text-white font-mono tracking-tight truncate">
+                      {item.value}
+                    </span>
+                    {item.subtext && (
+                      <span className="text-[10px] font-mono text-white/40 truncate">
+                        {item.subtext}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          );
+        })()}
       </motion.div>
 
-      {/* 5. CONDITIONAL WHAT-IF SCENARIO WIDGET */}
+      {/* 4. CONDITIONAL WHAT-IF SCENARIO WIDGET */}
       {forecastingSupported && activeProjectionData && activeProjectionData.length > 0 ? (
         <motion.div variants={cardEntrance}>
           <WhatIfWidget
@@ -248,6 +293,14 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
           <span>{forecastReason || "Requires continuous temporal dimension with sufficient historical observations."}</span>
         </motion.div>
       )}
+
+      {/* 5. PRIMARY SOURCE DATASET TABLE (POSITIONED AT BOTTOM OF DASHBOARD) */}
+      <DataTable
+        columns={columns}
+        data={tableData}
+        sourceType={dashboardState.sourceType}
+        defaultExpanded={true}
+      />
     </motion.div>
   );
 };

@@ -9,7 +9,7 @@
  * - Component entrances (~300-450ms) with subtle y-translation (6-14px).
  * - Transform and opacity animations only (no layout reflow).
  * - Full support for prefers-reduced-motion.
- * - Strict Watermelon UI palette: #212222, #18191b, #FE6749, #A5329E.
+ * - Strict Watermelon UI palette: #212222, #18191b, #C86342, #A5329E.
  * - Zero emojis.
  */
 

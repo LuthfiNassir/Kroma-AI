@@ -119,7 +119,7 @@ export const WhatIfWidget: React.FC<WhatIfWidgetProps> = ({
             className={cn(
               "rounded-full px-3 py-1 text-xs font-mono transition border cursor-pointer",
               deltaPercent === 15
-                ? "bg-[#FE6749] text-white border-[#FE6749]"
+                ? "bg-[#C86342] text-white border-[#C86342]"
                 : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
             )}
           >
@@ -131,7 +131,7 @@ export const WhatIfWidget: React.FC<WhatIfWidgetProps> = ({
             className={cn(
               "rounded-full px-3 py-1 text-xs font-mono transition border cursor-pointer",
               deltaPercent === -20
-                ? "bg-[#FE6749] text-white border-[#FE6749]"
+                ? "bg-[#C86342] text-white border-[#C86342]"
                 : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
             )}
           >
@@ -143,7 +143,7 @@ export const WhatIfWidget: React.FC<WhatIfWidgetProps> = ({
             className={cn(
               "rounded-full px-3 py-1 text-xs font-mono transition border cursor-pointer",
               deltaPercent === 10
-                ? "bg-[#FE6749] text-white border-[#FE6749]"
+                ? "bg-[#C86342] text-white border-[#C86342]"
                 : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
             )}
           >
@@ -189,7 +189,7 @@ export const WhatIfWidget: React.FC<WhatIfWidgetProps> = ({
             setActivePreset(`Slider (${val >= 0 ? "+" : ""}${val}%)`);
             if (onApplyDelta) onApplyDelta(val, `Slider ${val}%`);
           }}
-          className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#FE6749]"
+          className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#C86342]"
         />
       </div>
 
@@ -199,8 +199,8 @@ export const WhatIfWidget: React.FC<WhatIfWidgetProps> = ({
           <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorHistorical" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#FE6749" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="#FE6749" stopOpacity={0.0} />
+                <stop offset="5%" stopColor="#C86342" stopOpacity={0.8} />
+                <stop offset="95%" stopColor="#C86342" stopOpacity={0.0} />
               </linearGradient>
               <linearGradient id="colorWhatIf" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#A5329E" stopOpacity={0.8} />
@@ -223,7 +223,7 @@ export const WhatIfWidget: React.FC<WhatIfWidgetProps> = ({
             <Area
               type="monotone"
               dataKey="historical"
-              stroke="#FE6749"
+              stroke="#C86342"
               strokeWidth={3}
               fillOpacity={1}
               fill="url(#colorHistorical)"

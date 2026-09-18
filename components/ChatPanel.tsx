@@ -43,7 +43,7 @@ const FormattedMarkdown: React.FC<{ content: string }> = ({ content }) => {
 
           return (
             <div key={bIdx} className="space-y-1.5 pt-1">
-              <div className="inline-block rounded-md bg-[#FE6749]/15 border border-[#FE6749]/30 px-2 py-0.5 text-[11px] font-mono font-bold text-[#FE6749] uppercase tracking-wider">
+              <div className="inline-block rounded-md bg-[#C86342]/15 border border-[#C86342]/30 px-2 py-0.5 text-[11px] font-mono font-bold text-[#C86342] uppercase tracking-wider">
                 [{headerText}]
               </div>
               {restText && <div className="text-white/85 pl-0.5">{renderFormattedText(restText)}</div>}
@@ -61,7 +61,7 @@ const FormattedMarkdown: React.FC<{ content: string }> = ({ content }) => {
                 if (!cleanLine) return null;
                 return (
                   <li key={lIdx} className="flex items-start gap-2 text-white/85">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#FE6749] shrink-0 mt-1.5" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C86342] shrink-0 mt-1.5" />
                     <span>{renderFormattedText(cleanLine)}</span>
                   </li>
                 );
@@ -156,7 +156,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       <div className="flex-1 overflow-y-auto min-h-0 space-y-4 p-4 pr-2 no-scrollbar">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#FE6749]/10 border border-[#FE6749]/30 flex items-center justify-center text-[#FE6749]">
+            <div className="w-12 h-12 rounded-2xl bg-[#C86342]/10 border border-[#C86342]/30 flex items-center justify-center text-[#C86342]">
               <BrandMark className="w-7 h-7" />
             </div>
             <h3 className="text-base font-semibold text-white tracking-tight">
@@ -247,14 +247,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     {/* Inline Question-Specific Chart */}
                     {msg.inlineChart && (
                       <div className="space-y-1.5 pt-1">
-                        <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#FE6749] uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#C86342] uppercase tracking-wider">
                           <BarChart2 className="w-3.5 h-3.5" />
                           <span>[Multi-Cohort Comparison]</span>
                         </div>
                         <ChartCard
                           series={msg.inlineChart}
                           defaultType={msg.inlineChart.type || "bar"}
-                          accentColor="#FE6749"
+                          accentColor="#C86342"
                           secondaryColor="#A5329E"
                           className="min-h-[280px] p-4 bg-[#212222] border-white/10 cursor-default"
                         />
@@ -282,7 +282,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                           onClick={() => toggleSql(msg.id)}
                           className="rounded-lg px-2.5 py-1 text-[11px] font-mono bg-white/5 border border-white/10 text-white/70 hover:text-white flex items-center gap-2 transition cursor-pointer"
                         >
-                          <Code className="w-3 h-3 text-[#FE6749]" />
+                          <Code className="w-3.5 h-3.5 text-[#C86342]" />
                           <span>[DuckDB SQL Query]</span>
                           {isSqlOpen ? (
                             <ChevronUp className="w-3 h-3 ml-auto" />
@@ -331,7 +331,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               exit="hidden"
               className="flex justify-start"
             >
-              <div className="rounded-2xl bg-[#18191b] border border-[#FE6749]/40 p-3.5 text-xs text-[#FE6749] flex items-center gap-2.5 animate-pulse font-mono shadow-lg">
+              <div className="rounded-2xl bg-[#18191b] border border-[#C86342]/40 p-3.5 text-xs text-[#C86342] flex items-center gap-2.5 animate-pulse font-mono shadow-lg">
                 <Sparkles className="w-4 h-4 animate-spin" />
                 <span>[Kroma is analyzing your dataset with Qwen 2.5 Coder...]</span>
               </div>
@@ -354,7 +354,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               type="button"
               onClick={() => handleSend(s)}
               disabled={isLoading}
-              className="rounded-full px-3 py-1 bg-white/5 border border-white/10 hover:border-[#FE6749]/60 text-xs text-white/80 whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 font-mono"
+              className="rounded-full px-3 py-1 bg-white/5 border border-white/10 hover:border-[#C86342]/60 text-xs text-white/80 whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 font-mono"
             >
               {s}
             </motion.button>
@@ -362,7 +362,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
 
         {/* AI Composer Box */}
-        <div className="rounded-2xl bg-[#18191b] border border-white/15 p-3 focus-within:border-[#FE6749]/60 transition-colors shadow-2xl">
+        <div className="rounded-2xl bg-[#18191b] border border-white/15 p-3 focus-within:border-[#C86342]/60 transition-colors shadow-2xl">
           <textarea
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
@@ -381,7 +381,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               type="button"
               onClick={() => handleSend()}
               disabled={!inputPrompt.trim() || isLoading}
-              className="rounded-xl bg-[#FE6749] text-white px-4 py-1.5 text-xs font-semibold hover:bg-[#e85a3c] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="rounded-xl bg-[#C86342] text-white px-4 py-1.5 text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <span>[Analyzing...]</span>

@@ -28,7 +28,7 @@ export const DatasetSummaryCard: React.FC<DatasetSummaryCardProps> = ({ summary,
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/10 pb-3 gap-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#FE6749]/15 border border-[#FE6749]/30 text-[#FE6749] flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-[#C86342]/15 border border-[#C86342]/30 text-[#C86342] flex items-center justify-center">
             <Database className="w-4 h-4" />
           </div>
           <div>
@@ -66,7 +66,7 @@ export const DatasetSummaryCard: React.FC<DatasetSummaryCardProps> = ({ summary,
         {/* Dimensions */}
         <motion.div variants={slideUp} className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1">
           <div className="flex items-center gap-1.5 text-white/40 text-[10px] uppercase">
-            <Layers className="w-3 h-3 text-[#FE6749]" />
+            <Layers className="w-3 h-3 text-[#C86342]" />
             <span>[Dimensions]</span>
           </div>
           <div className="text-white/80 font-medium truncate">
@@ -123,18 +123,6 @@ export const DatasetSummaryCard: React.FC<DatasetSummaryCardProps> = ({ summary,
         </div>
       </div>
 
-      {/* Dashboard Rationale Banner */}
-      <div className="rounded-2xl bg-[#FE6749]/5 border border-[#FE6749]/20 p-3.5 flex items-start gap-2.5">
-        <HelpCircle className="w-4 h-4 text-[#FE6749] shrink-0 mt-0.5" />
-        <div className="space-y-0.5">
-          <span className="text-[10px] font-mono font-bold text-[#FE6749] uppercase tracking-wider block">
-            [Why This Dashboard Was Built]
-          </span>
-          <p className="text-xs text-white/85 font-sans leading-relaxed">
-            {summary.dashboardRationale}
-          </p>
-        </div>
-      </div>
     </motion.div>
   );
 };

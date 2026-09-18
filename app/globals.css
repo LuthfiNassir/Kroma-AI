@@ -5,12 +5,12 @@
 :root {
   --bg-canvas: #212222;
   --bg-surface: #18191b;
-  --accent-coral: #FE6749;
+  --accent-coral: #C86342;
   --accent-purple: #A5329E;
   --text-primary: #FFFFFF;
   --text-muted: rgba(255, 255, 255, 0.55);
   --border-card: rgba(255, 255, 255, 0.10);
-  --tile-hover: rgba(254, 103, 73, 0.35);
+  --tile-hover: rgba(200, 99, 66, 0.35);
   --tile-border: rgba(255, 255, 255, 0.08);
 }
 

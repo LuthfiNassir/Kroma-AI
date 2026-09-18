@@ -187,7 +187,7 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
         <div className="inline-block">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
             <BrandMark className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-mono tracking-widest text-[#FE6749] uppercase font-semibold">
+            <span className="text-[10px] font-mono tracking-widest text-[#C86342] uppercase font-semibold">
               KROMA — AUTONOMOUS DATA ANALYST
             </span>
           </div>
@@ -196,7 +196,7 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
         {/* Short Hero Heading */}
         <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight font-sans">
           Transform data <br />
-          <span className="text-[#FE6749]">into visual intelligence.</span>
+          <span className="text-[#C86342]">into visual intelligence.</span>
         </h1>
 
         {/* Short Supporting Text */}
@@ -208,11 +208,10 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
         {/* 3. THE UNIVERSAL AI COMPOSER CARD */}
         <form
           onSubmit={handleSubmit}
-          className={`rounded-2xl border p-3 sm:p-4 bg-[#18191b]/95 backdrop-blur-md shadow-2xl text-left space-y-2.5 transition-all duration-200 ${
-            isFocused
-              ? "border-[#FE6749]/60 shadow-[0_0_25px_rgba(254,103,73,0.12)] bg-[#18191b]"
-              : "border-white/15 hover:border-white/25"
-          }`}
+          className={`rounded-2xl border p-3 sm:p-4 bg-[#18191b]/95 backdrop-blur-md shadow-2xl text-left space-y-2.5 transition-all duration-200 ${isFocused
+            ? "border-[#C86342]/60 shadow-[0_0_25px_rgba(200,99,66,0.12)] bg-[#18191b]"
+            : "border-white/15 hover:border-white/25"
+            }`}
         >
           {/* Hidden File Input for Paperclip */}
           <input
@@ -234,7 +233,7 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
                 exit="exit"
                 className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs font-mono text-white/90"
               >
-                <FileText className="w-3.5 h-3.5 text-[#FE6749]" />
+                <FileText className="w-3.5 h-3.5 text-[#C86342]" />
                 <span className="font-semibold truncate max-w-[200px]">{attachedFile.name}</span>
                 <span className="text-white/40 text-[10px]">
                   ({(attachedFile.size / 1024).toFixed(1)} KB)
@@ -268,7 +267,7 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
                   ? `Ask a question about ${attachedFile.name}, or press Ask to analyze...`
                   : "Ask Kroma anything..."
               }
-              className="w-full rounded-xl bg-[#212222]/80 border border-white/10 p-3 text-xs font-mono text-white placeholder:text-white/35 focus:outline-none focus:border-[#FE6749]/80 transition-colors duration-150 resize-none min-h-[72px] max-h-[160px] overflow-y-auto"
+              className="w-full rounded-xl bg-[#212222]/80 border border-white/10 p-3 text-xs font-mono text-white placeholder:text-white/35 focus:outline-none focus:border-[#C86342]/80 transition-colors duration-150 resize-none min-h-[72px] max-h-[160px] overflow-y-auto"
             />
           </div>
 
@@ -283,8 +282,8 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
                 exit="exit"
                 className="overflow-hidden"
               >
-                <div className="rounded-lg bg-white/5 border border-[#FE6749]/30 px-3 py-1.5 flex items-center justify-between text-[11px] font-mono text-white/80">
-                  <div className="flex items-center gap-1.5 text-[#FE6749] font-medium">
+                <div className="rounded-lg bg-white/5 border border-[#C86342]/30 px-3 py-1.5 flex items-center justify-between text-[11px] font-mono text-white/80">
+                  <div className="flex items-center gap-1.5 text-[#C86342] font-medium">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>[DATA DETECTED]</span>
                   </div>
@@ -322,11 +321,11 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
               {...(shouldReduceMotion ? {} : buttonTapMotion)}
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="px-2.5 py-1.5 rounded-lg border border-white/10 bg-[#212222] text-xs font-mono text-white/70 hover:text-white hover:border-[#FE6749]/50 transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg border border-white/10 bg-[#212222] text-xs font-mono text-white/70 hover:text-white hover:border-[#C86342]/50 transition-colors flex items-center gap-1.5 cursor-pointer"
               title="Attach CSV or TSV file"
             >
-              <Paperclip className="w-3.5 h-3.5 text-[#FE6749]" />
-              <span>+ Attach CSV</span>
+              <Paperclip className="w-3.5 h-3.5 text-[#C86342]" />
+              <span>Attach CSV</span>
             </motion.button>
 
             {/* Right: Submit / Intelligent Loading Stage */}
@@ -334,7 +333,7 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
               {...(shouldReduceMotion ? {} : buttonTapMotion)}
               type="submit"
               disabled={isAnalyzing}
-              className="px-4 py-1.5 rounded-xl bg-[#FE6749] hover:bg-[#e85a3c] text-white font-mono text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+              className="px-4 py-1.5 rounded-xl bg-[#C86342] hover:opacity-90 text-white font-mono text-xs font-semibold transition-opacity flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
             >
               {isAnalyzing ? (
                 <>

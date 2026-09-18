@@ -84,7 +84,7 @@ export const AIComposer: React.FC<AIComposerProps> = ({
             onClick={handleSend}
             disabled={!value.trim() || isLoading}
             className={cn(
-              "rounded-xl bg-[#FE6749] text-white px-4 py-2 text-xs font-semibold hover:bg-[#e85a3c] transition-all duration-150 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
+              "rounded-xl bg-[#C86342] text-white px-4 py-2 text-xs font-semibold hover:opacity-90 transition-all duration-150 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
               isLoading && "animate-pulse"
             )}
           >

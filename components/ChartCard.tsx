@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Maximize2, Sparkles } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -33,16 +33,21 @@ interface ChartCardProps {
   secondaryColor?: string;
   className?: string;
   onClick?: () => void;
+  // Modal-local analytical zoom props
+  zoomedData?: any[];
+  yDomain?: [number | "auto", number | "auto"];
+  xDomain?: [number | "auto", number | "auto"];
+  isZoomed?: boolean;
 }
 
-const COLOR_PALETTE = ["#FE6749", "#A5329E", "#FE88ED", "#FF9E88", "#7D2277", "#38BDF8", "#34D399"];
+const COLOR_PALETTE = ["#C86342", "#A5329E", "#FE88ED", "#FF9E88", "#7D2277", "#38BDF8", "#34D399"];
 
 // Custom SVG Renderer for Boxplot
 const CustomBoxPlotRenderer: React.FC<{ data: any[]; accentColor: string }> = ({ data }) => {
   if (!data || !Array.isArray(data) || data.length === 0) return null;
 
   return (
-    <div className="w-full h-full flex flex-col justify-around py-2 px-4 space-y-2 overflow-y-auto font-mono">
+    <div className="w-full h-full flex flex-col justify-around py-2 px-4 space-y-2 overflow-y-auto font-mono no-scrollbar">
       {data.map((item, idx) => {
         const cat = item.category || item.label || `Cohort ${idx + 1}`;
         const min = Number(item.min) || 0;
@@ -79,7 +84,7 @@ const CustomBoxPlotRenderer: React.FC<{ data: any[]; accentColor: string }> = ({
                 style={{ left: `${q1Pct}%`, width: `${boxWidthPct}%` }}
               />
               <div
-                className="absolute h-4 w-1 bg-[#FE6749] z-10 rounded-full"
+                className="absolute h-4 w-1 bg-[#C86342] z-10 rounded-full"
                 style={{ left: `${medianPct}%` }}
               />
             </div>
@@ -148,9 +153,13 @@ const CustomHeatmapRenderer: React.FC<{ data: any[]; accentColor: string }> = ({
 export const ChartCard: React.FC<ChartCardProps> = ({
   series,
   defaultType = "bar",
-  accentColor = "#FE6749",
+  accentColor = "#C86342",
   className,
   onClick,
+  zoomedData,
+  yDomain,
+  xDomain,
+  isZoomed = false,
 }) => {
   const shouldReduceMotion = useReducedMotion();
 
@@ -167,24 +176,43 @@ export const ChartCard: React.FC<ChartCardProps> = ({
     );
   }
 
+  // Use zoomed data slice if passed (expanded view), otherwise baseline dashboard dataset
+  const effectiveData = (zoomedData && zoomedData.length > 0) ? zoomedData : series.data;
+
   const chartType: ChartType = (series.type && series.type !== "none" ? series.type : defaultType) as ChartType;
-  const isMultiCohort = series.data.length >= 4;
-  const isForecastChart = series.isForecastChart || (series.data[0]?.historical !== undefined && series.data[0]?.forecast !== undefined);
+  const isMultiCohort = effectiveData.length >= 4;
+  const isForecastChart = series.isForecastChart || (effectiveData[0]?.historical !== undefined && effectiveData[0]?.forecast !== undefined);
 
   const xAxisTitle = series.xAxisLabel || series.xKey || "Category";
   const yAxisTitle = series.yAxisLabel || series.yKey || "Value";
 
   // Data key mappers
-  const xKey = series.xKey || (series.data[0]?.label !== undefined ? "label" : series.data[0]?.x !== undefined ? "x" : "name");
-  const yKey = series.yKey || (series.data[0]?.value !== undefined ? "value" : series.data[0]?.y !== undefined ? "y" : "value");
+  const xKey = series.xKey || (effectiveData[0]?.label !== undefined ? "label" : effectiveData[0]?.x !== undefined ? "x" : "name");
+  const yKey = series.yKey || (effectiveData[0]?.value !== undefined ? "value" : effectiveData[0]?.y !== undefined ? "y" : "value");
+
+  // Semantic value formatter for tooltips (currency, percentage, or integer/float)
+  const formatMetricValue = (val: any, nameKey?: string) => {
+    if (typeof val !== "number" || isNaN(val)) return String(val ?? "");
+    const context = `${series.title || ""} ${nameKey || ""} ${yAxisTitle} ${xAxisTitle}`.toLowerCase();
+    const isCurrency = /\b(revenue|sales|profit|cost|price|spend|budget|expense|salary|amount|fare)\b/i.test(context);
+    const isPercent = /\b(pct|rate|ratio|percent|percentage|margin)\b/i.test(context);
+
+    if (isCurrency) {
+      return `$${Number(val.toFixed(2)).toLocaleString()}`;
+    }
+    if (isPercent) {
+      return `${Number(val.toFixed(2)).toLocaleString()}%`;
+    }
+    return Number(val.toFixed(2)).toLocaleString();
+  };
 
   // Calculate total volume for pie/donut legend percentage
-  const totalPieVolume = series.data.reduce((acc, curr) => acc + (Number(curr[yKey]) || 0), 0);
+  const totalPieVolume = effectiveData.reduce((acc, curr) => acc + (Number(curr[yKey]) || 0), 0);
 
   // Multi-series keys for line charts
-  const multiSeriesKeys = chartType === "line" && !isForecastChart && series.data[0]
-    ? Object.keys(series.data[0]).filter(
-        (k) => k !== xKey && k !== "label" && k !== "name" && k !== "category" && typeof series.data[0][k] === "number"
+  const multiSeriesKeys = chartType === "line" && !isForecastChart && effectiveData[0]
+    ? Object.keys(effectiveData[0]).filter(
+        (k) => k !== xKey && k !== "label" && k !== "name" && k !== "category" && typeof effectiveData[0][k] === "number"
       )
     : [];
 
@@ -195,14 +223,14 @@ export const ChartCard: React.FC<ChartCardProps> = ({
       onClick={onClick}
       className={cn(
         "rounded-3xl bg-[#18191b] border border-white/10 p-6 min-h-[340px] flex flex-col justify-between shadow-xl relative overflow-hidden transition-colors duration-200 group",
-        onClick && "cursor-pointer hover:border-[#FE6749]/50",
+        onClick && "cursor-pointer hover:border-[#C86342]/50",
         className
       )}
     >
-      {/* Hover Enlarge Indicator Badge */}
+      {/* Hover Enlarge Indicator Badge (On dashboard cards only) */}
       {onClick && (
         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-          <span className="rounded-full px-2.5 py-1 text-[10px] font-mono bg-[#FE6749] text-white shadow-md flex items-center gap-1">
+          <span className="rounded-full px-2.5 py-1 text-[10px] font-mono bg-[#C86342] text-white shadow-md flex items-center gap-1">
             <Maximize2 className="w-3 h-3" />
           </span>
         </div>
@@ -218,8 +246,15 @@ export const ChartCard: React.FC<ChartCardProps> = ({
             {isForecastChart ? "Actual History vs 6-Month Projection" : `Axis: ${xAxisTitle} vs ${yAxisTitle}`}
           </p>
         </div>
-        <div className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/70 shrink-0 ml-2">
-          {isForecastChart ? "[FORECAST]" : `[${chartType.toUpperCase()} CHART]`}
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {isZoomed && (
+            <span className="rounded-full px-2 py-0.5 text-[9px] font-mono bg-[#C86342]/20 text-[#C86342] border border-[#C86342]/40">
+              [ZOOMED VIEW]
+            </span>
+          )}
+          <div className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/70">
+            {isForecastChart ? "[FORECAST]" : `[${chartType.toUpperCase()} CHART]`}
+          </div>
         </div>
       </div>
 
@@ -227,7 +262,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
       {isForecastChart && (
         <div className="flex items-center gap-3 mb-2 font-mono text-[11px]">
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-1 bg-[#FE6749] rounded-full inline-block" />
+            <span className="w-3 h-1 bg-[#C86342] rounded-full inline-block" />
             <span className="text-white/80 font-semibold">Actual</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -255,13 +290,13 @@ export const ChartCard: React.FC<ChartCardProps> = ({
       {/* Responsive Height Chart Canvas Container */}
       <div className="w-full flex-1 min-h-[220px] relative font-mono">
         {chartType === "boxplot" ? (
-          <CustomBoxPlotRenderer data={series.data} accentColor={accentColor} />
+          <CustomBoxPlotRenderer data={effectiveData} accentColor={accentColor} />
         ) : chartType === "heatmap" ? (
-          <CustomHeatmapRenderer data={series.data} accentColor={accentColor} />
+          <CustomHeatmapRenderer data={effectiveData} accentColor={accentColor} />
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             {chartType === "area" ? (
-              <AreaChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 25 : 0 }}>
+              <AreaChart data={effectiveData} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 25 : 0 }}>
                 <defs>
                   <linearGradient id={`gradient_${series.id || "card"}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={accentColor} stopOpacity={0.8} />
@@ -274,11 +309,17 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={10}
                   tickLine={false}
-                  interval={series.data.length > 12 ? "preserveStartEnd" : 0}
+                  interval={effectiveData.length > 12 ? "preserveStartEnd" : 0}
                   angle={isMultiCohort ? -20 : 0}
                   textAnchor={isMultiCohort ? "end" : "middle"}
                 />
-                <YAxis stroke="rgba(255, 255, 255, 0.4)" fontSize={11} tickLine={false} />
+                <YAxis
+                  domain={yDomain || ["auto", "auto"]}
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  fontSize={11}
+                  tickLine={false}
+                  tickFormatter={(val) => formatMetricValue(val)}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "#212222",
@@ -286,7 +327,13 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                     borderRadius: "12px",
                     color: "#ffffff",
                     fontSize: "12px",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
                   }}
+                  formatter={(val: any, name: any) => [
+                    formatMetricValue(val, String(name)),
+                    String(name).replace(/_/g, " "),
+                  ]}
+                  labelFormatter={(label: any) => `${xAxisTitle}: ${label}`}
                 />
                 <Area
                   type="monotone"
@@ -296,23 +343,29 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   fillOpacity={1}
                   fill={`url(#gradient_${series.id || "card"})`}
                   isAnimationActive={!shouldReduceMotion}
-                  animationDuration={500}
+                  animationDuration={350}
                   animationEasing="ease-out"
                 />
               </AreaChart>
             ) : chartType === "line" ? (
-              <LineChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 25 : 0 }}>
+              <LineChart data={effectiveData} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 25 : 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
                 <XAxis
                   dataKey={xKey}
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={10}
                   tickLine={false}
-                  interval={series.data.length > 12 ? "preserveStartEnd" : 0}
+                  interval={effectiveData.length > 12 ? "preserveStartEnd" : 0}
                   angle={isMultiCohort ? -20 : 0}
                   textAnchor={isMultiCohort ? "end" : "middle"}
                 />
-                <YAxis stroke="rgba(255, 255, 255, 0.4)" fontSize={11} tickLine={false} />
+                <YAxis
+                  domain={yDomain || ["auto", "auto"]}
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  fontSize={11}
+                  tickLine={false}
+                  tickFormatter={(val) => formatMetricValue(val)}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "#212222",
@@ -320,7 +373,13 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                     borderRadius: "12px",
                     color: "#ffffff",
                     fontSize: "12px",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
                   }}
+                  formatter={(val: any, name: any) => [
+                    formatMetricValue(val, String(name)),
+                    String(name).replace(/_/g, " "),
+                  ]}
+                  labelFormatter={(label: any) => `${xAxisTitle}: ${label}`}
                 />
                 {isForecastChart ? (
                   <>
@@ -328,9 +387,9 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                       name="Actual"
                       type="monotone"
                       dataKey="historical"
-                      stroke="#FE6749"
+                      stroke="#C86342"
                       strokeWidth={3}
-                      dot={{ fill: "#FE6749", r: 3 }}
+                      dot={{ fill: "#C86342", r: 3 }}
                       activeDot={{ r: 5, fill: "#ffffff" }}
                       isAnimationActive={!shouldReduceMotion}
                       connectNulls={false}
@@ -371,7 +430,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                     dot={{ fill: accentColor, r: 4 }}
                     activeDot={{ r: 6, fill: "#ffffff" }}
                     isAnimationActive={!shouldReduceMotion}
-                    animationDuration={500}
+                    animationDuration={350}
                     animationEasing="ease-out"
                   />
                 )}
@@ -386,9 +445,13 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                     color: "#ffffff",
                     fontSize: "12px",
                   }}
+                  formatter={(val: any, name: any) => [
+                    formatMetricValue(val, String(name)),
+                    String(name).replace(/_/g, " "),
+                  ]}
                 />
                 <Pie
-                  data={series.data}
+                  data={effectiveData}
                   dataKey={yKey}
                   nameKey={xKey}
                   cx="50%"
@@ -397,10 +460,10 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   outerRadius={75}
                   paddingAngle={4}
                   isAnimationActive={!shouldReduceMotion}
-                  animationDuration={500}
+                  animationDuration={350}
                   animationEasing="ease-out"
                 >
-                  {series.data.map((entry, index) => (
+                  {effectiveData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={COLOR_PALETTE[index % COLOR_PALETTE.length]}
@@ -413,8 +476,22 @@ export const ChartCard: React.FC<ChartCardProps> = ({
             ) : chartType === "scatter" ? (
               <ScatterChart margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
-                <XAxis dataKey="x" type="number" stroke="rgba(255, 255, 255, 0.4)" fontSize={11} />
-                <YAxis dataKey="y" type="number" stroke="rgba(255, 255, 255, 0.4)" fontSize={11} />
+                <XAxis
+                  dataKey="x"
+                  type="number"
+                  domain={xDomain || ["auto", "auto"]}
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  fontSize={11}
+                  tickFormatter={(val) => formatMetricValue(val, xAxisTitle)}
+                />
+                <YAxis
+                  dataKey="y"
+                  type="number"
+                  domain={yDomain || ["auto", "auto"]}
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  fontSize={11}
+                  tickFormatter={(val) => formatMetricValue(val, yAxisTitle)}
+                />
                 <Tooltip
                   cursor={{ strokeDasharray: "3 3" }}
                   contentStyle={{
@@ -423,19 +500,24 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                     borderRadius: "12px",
                     color: "#ffffff",
                     fontSize: "12px",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
                   }}
+                  formatter={(val: any, name: any) => [
+                    formatMetricValue(val, String(name)),
+                    String(name).toUpperCase(),
+                  ]}
                 />
                 <Scatter
-                  data={series.data}
+                  data={effectiveData}
                   fill={accentColor}
                   isAnimationActive={!shouldReduceMotion}
-                  animationDuration={500}
+                  animationDuration={350}
                   animationEasing="ease-out"
                 />
               </ScatterChart>
             ) : chartType === "treemap" ? (
               <Treemap
-                data={series.data}
+                data={effectiveData}
                 dataKey="value"
                 nameKey="name"
                 aspectRatio={4 / 3}
@@ -445,18 +527,24 @@ export const ChartCard: React.FC<ChartCardProps> = ({
               />
             ) : (
               /* Default "bar" or "histogram" */
-              <BarChart data={series.data} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 30 : 0 }}>
+              <BarChart data={effectiveData} margin={{ top: 10, right: 10, left: -20, bottom: isMultiCohort ? 30 : 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
                 <XAxis
                   dataKey={xKey}
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={10}
                   tickLine={false}
-                  interval={series.data.length > 12 ? "preserveStartEnd" : 0}
+                  interval={effectiveData.length > 12 ? "preserveStartEnd" : 0}
                   angle={isMultiCohort ? -25 : 0}
                   textAnchor={isMultiCohort ? "end" : "middle"}
                 />
-                <YAxis stroke="rgba(255, 255, 255, 0.4)" fontSize={11} tickLine={false} />
+                <YAxis
+                  domain={yDomain || ["auto", "auto"]}
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  fontSize={11}
+                  tickLine={false}
+                  tickFormatter={(val) => formatMetricValue(val, yAxisTitle)}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "#212222",
@@ -464,14 +552,20 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                     borderRadius: "12px",
                     color: "#ffffff",
                     fontSize: "12px",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
                   }}
+                  formatter={(val: any, name: any) => [
+                    formatMetricValue(val, String(name)),
+                    String(name).replace(/_/g, " "),
+                  ]}
+                  labelFormatter={(label: any) => `${xAxisTitle}: ${label}`}
                 />
                 <Bar
                   dataKey={yKey}
                   fill={accentColor}
                   radius={[8, 8, 0, 0]}
                   isAnimationActive={!shouldReduceMotion}
-                  animationDuration={500}
+                  animationDuration={350}
                   animationEasing="ease-out"
                 />
               </BarChart>
@@ -483,7 +577,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
       {/* DEDICATED STRUCTURED DONUT CHART LEGEND */}
       {chartType === "pie" && (
         <div className="mt-3 pt-3 border-t border-white/10 font-mono text-[11px] grid grid-cols-2 gap-1.5">
-          {series.data.map((item, idx) => {
+          {effectiveData.map((item, idx) => {
             const catName = String(item[xKey] || item.label || item.name || `Item ${idx + 1}`);
             const val = Number(item[yKey] || item.value) || 0;
             const pct = item.pct || (totalPieVolume > 0 ? ((val / totalPieVolume) * 100).toFixed(1) : "0");

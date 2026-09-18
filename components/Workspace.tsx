@@ -25,6 +25,7 @@ import { BentoGrid } from "./BentoGrid";
 import { ChatPanel } from "./ChatPanel";
 import { KromaComposer } from "./KromaComposer";
 import { ChartModal } from "./ChartModal";
+import { DeleteSessionModal } from "./DeleteSessionModal";
 import { StaticGrid } from "./ui/StaticGrid";
 import { Tiles } from "./ui/Tiles";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -47,18 +48,57 @@ export const Workspace: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [activeModalChart, setActiveModalChart] = useState<ChartDataSeries | null>(null);
+  const [sessionPendingDelete, setSessionPendingDelete] = useState<AnalysisSession | null>(null);
 
-  // Load sessions on initial render
+  // Load sessions on initial render with reload awareness (Requirements 12 & 13)
   useEffect(() => {
     async function loadData() {
       const loaded = await fetchSessions();
       setSessions(loaded);
-      if (loaded.length > 0) {
-        setActiveSession(loaded[0]);
+
+      // Distinguish Fresh Launch vs Page Reload:
+      // sessionStorage is tab-scoped: empty on new launch, preserved across reloads
+      const activeId = typeof window !== "undefined" ? sessionStorage.getItem("kroma_active_session_id") : null;
+      if (activeId) {
+        const target = loaded.find((s) => s.sessionId === activeId);
+        if (target) {
+          setActiveSession(target);
+
+          // Restore modal chart if it was open prior to reload
+          const activeChartTitle = sessionStorage.getItem("kroma_active_chart_title");
+          if (activeChartTitle) {
+            const chartMatch = target.dashboardState.charts.find((c) => c.title === activeChartTitle);
+            if (chartMatch) {
+              setActiveModalChart(chartMatch);
+            }
+          }
+        }
       }
+      // If no activeId in sessionStorage, app cleanly presents Landing Page (activeSession = null)
     }
     loadData();
   }, []);
+
+  // Sync activeSession to sessionStorage for browser reload recovery
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (activeSession) {
+      sessionStorage.setItem("kroma_active_session_id", activeSession.sessionId);
+    } else {
+      sessionStorage.removeItem("kroma_active_session_id");
+      sessionStorage.removeItem("kroma_active_chart_title");
+    }
+  }, [activeSession?.sessionId]);
+
+  // Sync activeModalChart to sessionStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (activeModalChart) {
+      sessionStorage.setItem("kroma_active_chart_title", activeModalChart.title);
+    } else {
+      sessionStorage.removeItem("kroma_active_chart_title");
+    }
+  }, [activeModalChart?.title]);
 
   // Unified Input Handler for Universal Composer (CSV Attachment, Direct Tabular Paste, or Prompt+Data)
   const handleAnalyze = async ({
@@ -184,9 +224,21 @@ export const Workspace: React.FC = () => {
     }
   };
 
-  // Handle new analysis (reset view to uploader)
+  // Handle Home Navigation (triggered by clicking BrandMark / Logo in sidebar)
+  // Preserves existing analyses in session history so user can freely switch back
+  const handleNavigateHome = () => {
+    setActiveSession(null);
+    setActiveModalChart(null);
+  };
+
+  // Handle new analysis (reset view to landing composer)
   const handleNewSession = () => {
     setActiveSession(null);
+    setActiveModalChart(null);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("kroma_active_session_id");
+      sessionStorage.removeItem("kroma_active_chart_title");
+    }
   };
 
   // Handle selecting a session
@@ -194,18 +246,31 @@ export const Workspace: React.FC = () => {
     const target = sessions.find((s) => s.sessionId === id);
     if (target) {
       setActiveSession(target);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("kroma_active_session_id", id);
+      }
     }
   };
 
-  // Handle deleting a session
-  const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
+  // Request session deletion (opens confirmation modal, never deletes directly)
+  const handleRequestDeleteSession = (session: AnalysisSession, e: React.MouseEvent) => {
     e.stopPropagation();
-    await deleteSession(id);
-    const updated = sessions.filter((s) => s.sessionId !== id);
+    setSessionPendingDelete(session);
+  };
+
+  // Execute confirmed deletion with clean transition
+  const handleConfirmDeleteSession = async (sessionId: string) => {
+    await deleteSession(sessionId);
+    const updated = sessions.filter((s) => s.sessionId !== sessionId);
     setSessions(updated);
-    if (activeSession?.sessionId === id) {
-      setActiveSession(updated[0] || null);
+    if (activeSession?.sessionId === sessionId) {
+      setActiveSession(null); // Clean landing state transition
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("kroma_active_session_id");
+        sessionStorage.removeItem("kroma_active_chart_title");
+      }
     }
+    setSessionPendingDelete(null);
   };
 
   // Shared Refresh Pipeline (invoked by Dashboard button & Chat actions)
@@ -565,9 +630,10 @@ export const Workspace: React.FC = () => {
         activeSessionId={activeSession?.sessionId || null}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
-        onDeleteSession={handleDeleteSession}
+        onRequestDeleteSession={handleRequestDeleteSession}
         isOpen={sidebarOpen}
         onToggleOpen={() => setSidebarOpen(!sidebarOpen)}
+        onNavigateHome={handleNavigateHome}
       />
 
       {/* Main Workspace Area */}
@@ -595,12 +661,12 @@ export const Workspace: React.FC = () => {
                 onClick={() => handleRefreshDashboard()}
                 disabled={isRefreshing}
                 className={cn(
-                  "px-3 py-1.5 text-xs rounded-xl font-medium font-mono transition-colors cursor-pointer flex items-center gap-1.5 border border-white/10 bg-[#212222] text-white/90 hover:text-white hover:border-[#FE6749]/50 hover:bg-[#18191b]",
-                  isRefreshing && "opacity-60 cursor-not-allowed text-[#FE6749]"
+                  "px-3 py-1.5 text-xs rounded-xl font-medium font-mono transition-colors cursor-pointer flex items-center gap-1.5 border border-white/10 bg-[#212222] text-white/90 hover:text-white hover:border-[#C86342]/50 hover:bg-[#18191b]",
+                  isRefreshing && "opacity-60 cursor-not-allowed text-[#C86342]"
                 )}
                 title="Re-run deterministic analysis pipeline against full dataset"
               >
-                <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin text-[#FE6749]")} />
+                <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin text-[#C86342]")} />
                 <span className="hidden sm:inline">
                   {isRefreshing ? "[Re-Analyzing...]" : "[Refresh Analysis]"}
                 </span>
@@ -614,7 +680,7 @@ export const Workspace: React.FC = () => {
                   className={cn(
                     "px-3 py-1 rounded-lg transition-all cursor-pointer",
                     activeTab === "split"
-                      ? "bg-[#FE6749] text-white font-bold shadow-md"
+                      ? "bg-[#C86342] text-white font-bold shadow-md"
                       : "text-white/60 hover:text-white"
                   )}
                 >
@@ -626,7 +692,7 @@ export const Workspace: React.FC = () => {
                   className={cn(
                     "px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
                     activeTab === "dashboard"
-                      ? "bg-[#FE6749] text-white font-bold shadow-md"
+                      ? "bg-[#C86342] text-white font-bold shadow-md"
                       : "text-white/60 hover:text-white"
                   )}
                 >
@@ -639,7 +705,7 @@ export const Workspace: React.FC = () => {
                   className={cn(
                     "px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
                     activeTab === "chat"
-                      ? "bg-[#FE6749] text-white font-bold shadow-md"
+                      ? "bg-[#C86342] text-white font-bold shadow-md"
                       : "text-white/60 hover:text-white"
                   )}
                 >
@@ -657,22 +723,32 @@ export const Workspace: React.FC = () => {
           <AnimatePresence mode="wait" initial={false}>
             {!activeSession ? (
               /* State A: Dedicated Full-Screen Landing Experience (100% Non-Scrollable) */
-              <div
+              <motion.div
                 key="landing-view"
-                onPointerMove={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const x = `${((e.clientX - rect.left) / rect.width) * 100}%`;
-                  const y = `${((e.clientY - rect.top) / rect.height) * 100}%`;
-                  e.currentTarget.style.setProperty("--mouse-x", x);
-                  e.currentTarget.style.setProperty("--mouse-y", y);
-                }}
-                className="h-full w-full overflow-hidden flex flex-col justify-center items-center relative p-4"
+                variants={shouldReduceMotion ? undefined : pageViewVariants}
+                initial={shouldReduceMotion ? undefined : "hidden"}
+                animate={shouldReduceMotion ? undefined : "visible"}
+                exit={shouldReduceMotion ? undefined : "exit"}
+                className="h-full w-full overflow-hidden flex flex-col justify-center items-center relative p-4 select-none"
               >
+                {/* 1. Interactive Technical Grid Background (Cells respond smoothly to pointer proximity) */}
                 <Tiles />
+
+                {/* 2. Soft Environmental Ambient Glow (No Boxed Edges, Natural Radial Falloff) */}
+                <div
+                  aria-hidden="true"
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[460px] rounded-full pointer-events-none z-0 blur-[130px] opacity-25"
+                  style={{
+                    background:
+                      "radial-gradient(ellipse at center, rgba(165, 50, 158, 0.35) 0%, rgba(200, 99, 66, 0.12) 40%, transparent 70%)",
+                  }}
+                />
+
+                {/* 3. Foreground Content */}
                 <div className="relative z-10 w-full flex flex-col items-center justify-center">
                   <KromaComposer onAnalyze={handleAnalyze} isAnalyzing={isAnalyzingNew} />
                 </div>
-              </div>
+              </motion.div>
             ) : (
               /* State B: Active Analysis Workspace with Bento Grid & Chat */
               <motion.div
@@ -693,8 +769,8 @@ export const Workspace: React.FC = () => {
                       exit="exit"
                       className="absolute inset-0 z-40 bg-[#212222]/80 backdrop-blur-sm flex items-center justify-center p-6"
                     >
-                      <div className="rounded-2xl bg-[#18191b] border border-[#FE6749]/40 p-6 flex flex-col items-center gap-3 shadow-2xl">
-                        <Loader2 className="w-8 h-8 text-[#FE6749] animate-spin" />
+                      <div className="rounded-2xl bg-[#18191b] border border-[#C86342]/40 p-6 flex flex-col items-center gap-3 shadow-2xl">
+                        <Loader2 className="w-8 h-8 text-[#C86342] animate-spin" />
                         <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
                           [Re-Analyzing Dataset Intelligence...]
                         </span>
@@ -755,6 +831,15 @@ export const Workspace: React.FC = () => {
       <ChartModal
         chart={activeModalChart}
         onClose={() => setActiveModalChart(null)}
+      />
+
+      {/* Multi-Layer Accidental-Deletion Protection Shield Modal */}
+      <DeleteSessionModal
+        isOpen={Boolean(sessionPendingDelete)}
+        session={sessionPendingDelete}
+        isActiveSession={sessionPendingDelete?.sessionId === activeSession?.sessionId}
+        onClose={() => setSessionPendingDelete(null)}
+        onConfirmDelete={handleConfirmDeleteSession}
       />
     </div>
   );
