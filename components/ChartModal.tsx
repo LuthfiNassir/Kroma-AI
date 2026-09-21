@@ -278,9 +278,10 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                 {...(shouldReduceMotion ? {} : buttonTapMotion)}
                 type="button"
                 onClick={onClose}
+                aria-label="Close chart modal"
                 className="rounded-full px-4 py-1.5 bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors flex items-center gap-1.5 cursor-pointer border border-white/10 font-mono shrink-0 ml-3"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
               </motion.button>
             </div>
 
@@ -295,7 +296,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                       [Visual Canvas]
                     </span>
                     <span className="rounded-full px-2.5 py-0.5 text-[10px] font-mono bg-white/5 border border-white/10 text-white/70">
-                      [{chart.type?.toUpperCase() || "CHART"}]
+                      [{chart.forecastBadge || (chart.isForecastChart ? "FORECAST" : chart.type?.toUpperCase() || "CHART")}]
                     </span>
                   </div>
 
@@ -309,18 +310,20 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                           disabled={!zoomedResult.canPanLeft}
                           onClick={handlePanLeft}
                           title="Pan Left"
+                          aria-label="Pan chart left"
                           className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
                         >
-                          <ChevronLeft className="w-3.5 h-3.5" />
+                          <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                         <button
                           type="button"
                           disabled={!zoomedResult.canPanRight}
                           onClick={handlePanRight}
                           title="Pan Right"
+                          aria-label="Pan chart right"
                           className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
                         >
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                         <span className="h-4 w-px bg-white/10 mx-0.5" />
                       </>
@@ -332,9 +335,10 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                       disabled={!zoomedResult.isZoomed}
                       onClick={handleZoomOut}
                       title="Zoom Out (−) or scroll down"
+                      aria-label="Zoom out chart"
                       className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
                     >
-                      <Minus className="w-3.5 h-3.5" />
+                      <Minus className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
 
                     {/* Zoom Readout */}
@@ -348,9 +352,10 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                       disabled={viewport.zoom >= 8.0}
                       onClick={handleZoomIn}
                       title="Zoom In (+) or trackpad pinch / scroll up"
+                      aria-label="Zoom in chart"
                       className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
 
                     {/* Reset Zoom Button */}
@@ -359,6 +364,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                       disabled={!zoomedResult.isZoomed}
                       onClick={handleReset}
                       title="Reset Zoom to Baseline"
+                      aria-label="Reset zoom to baseline"
                       className={cn(
                         "px-2 h-6 rounded-lg border flex items-center gap-1 text-[10px] font-bold cursor-pointer transition",
                         zoomedResult.isZoomed
@@ -366,7 +372,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                           : "bg-white/5 border-white/10 text-white/30 disabled:cursor-not-allowed"
                       )}
                     >
-                      <RotateCcw className="w-3 h-3" />
+                      <RotateCcw className="w-3 h-3" aria-hidden="true" />
                       <span>Reset</span>
                     </button>
                   </div>
@@ -390,6 +396,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                     yDomain={zoomedResult.yDomain}
                     xDomain={zoomedResult.xDomain}
                     isZoomed={zoomedResult.isZoomed}
+                    isModal={true}
                     className="bg-transparent border-0 shadow-none hover:border-transparent p-0 h-full w-full cursor-default"
                   />
                 </div>
@@ -532,6 +539,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ chart, onClose }) => {
                   <motion.div variants={modalSectionReveal} className="pt-1">
                     <button
                       type="button"
+                      aria-expanded={showTechnicalDetails}
                       onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
                       className="w-full flex items-center justify-between p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 font-mono text-xs text-white/60 transition cursor-pointer"
                     >

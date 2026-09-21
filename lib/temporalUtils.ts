@@ -1,4 +1,4 @@
-﻿export interface NormalizedPeriod {
+export interface NormalizedPeriod {
   raw: string;
   year: number;
   month?: number; // 1-12
@@ -214,15 +214,177 @@ export function parseDatePeriod(raw: any): NormalizedPeriod | null {
   return null;
 }
 
+export function periodToTimestamp(p: NormalizedPeriod): number {
+  if (p.year && p.month !== undefined && p.day !== undefined) {
+    return Date.UTC(p.year, p.month - 1, p.day);
+  }
+  if (p.year && p.month !== undefined) {
+    return Date.UTC(p.year, p.month - 1, 1);
+  }
+  if (p.year && p.quarter !== undefined) {
+    return Date.UTC(p.year, (p.quarter - 1) * 3, 1);
+  }
+  return Date.UTC(p.year, 0, 1);
+}
+
+export interface TemporalSpacingAnalysis {
+  frequency: "hourly" | "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular";
+  isRegular: boolean;
+  averageIntervalDays: number;
+  minIntervalDays: number;
+  maxIntervalDays: number;
+  continuityScore: number;
+  granularityLabel: string;
+  timeSpanDescription: string;
+  duplicateTimestampsCount: number;
+  spanDays: number;
+}
+
+export function analyzeDateSpacing(
+  dateObjects: { raw: string; parsed: NormalizedPeriod; sortKey: number }[]
+): TemporalSpacingAnalysis {
+  if (dateObjects.length < 2) {
+    return {
+      frequency: "irregular",
+      isRegular: false,
+      averageIntervalDays: 0,
+      minIntervalDays: 0,
+      maxIntervalDays: 0,
+      continuityScore: 1.0,
+      granularityLabel: "single observation",
+      timeSpanDescription: dateObjects[0]?.parsed.displayLabel || "single observation",
+      duplicateTimestampsCount: 0,
+      spanDays: 0,
+    };
+  }
+
+  // Chronological sort
+  const sorted = [...dateObjects].sort((a, b) => a.sortKey - b.sortKey);
+  const timestamps = sorted.map((d) => periodToTimestamp(d.parsed));
+  const first = sorted[0].parsed;
+  const last = sorted[sorted.length - 1].parsed;
+  const spanMs = timestamps[timestamps.length - 1] - timestamps[0];
+  const spanDays = Math.max(0, Math.round(spanMs / (1000 * 60 * 60 * 24)));
+
+  const intervals: number[] = [];
+  let duplicateCount = 0;
+
+  for (let i = 1; i < timestamps.length; i++) {
+    const diffDays = Math.round((timestamps[i] - timestamps[i - 1]) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) {
+      duplicateCount++;
+    }
+    intervals.push(diffDays);
+  }
+
+  const validIntervals = intervals.filter((d) => d > 0);
+  const avgInterval = validIntervals.length > 0
+    ? validIntervals.reduce((a, b) => a + b, 0) / validIntervals.length
+    : 0;
+  const minInterval = validIntervals.length > 0 ? Math.min(...validIntervals) : 0;
+  const maxInterval = validIntervals.length > 0 ? Math.max(...validIntervals) : 0;
+
+  // Check structural markers
+  const hasDays = sorted.every((d) => d.parsed.day !== undefined);
+  const hasMonthsWithoutDays = sorted.every((d) => d.parsed.month !== undefined && d.parsed.day === undefined);
+  const hasQuarters = sorted.every((d) => d.parsed.quarter !== undefined);
+  const hasOnlyYears = sorted.every((d) => d.parsed.year !== undefined && !d.parsed.month && !d.parsed.quarter && !d.parsed.day);
+
+  let freq: "hourly" | "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular" = "irregular";
+  let isRegular = false;
+  let continuityScore = 0.95;
+
+  if (hasQuarters) {
+    freq = "quarterly";
+    isRegular = maxInterval <= 100 && minInterval >= 80;
+  } else if (hasOnlyYears) {
+    freq = "yearly";
+    isRegular = maxInterval <= 370 && minInterval >= 360;
+  } else if (hasMonthsWithoutDays) {
+    freq = "monthly";
+    isRegular = maxInterval <= 32 && minInterval >= 28;
+    if (!isRegular) continuityScore = 0.7;
+  } else if (hasDays) {
+    // Determine whether daily, weekly, monthly, or irregular from spacing
+    const intervalStdDev = validIntervals.length > 0
+      ? Math.sqrt(validIntervals.reduce((acc, v) => acc + Math.pow(v - avgInterval, 2), 0) / validIntervals.length)
+      : 0;
+
+    if (maxInterval <= 1 && minInterval >= 1) {
+      freq = "daily";
+      isRegular = true;
+    } else if (minInterval >= 6 && maxInterval <= 8 && intervalStdDev <= 1.0) {
+      freq = "weekly";
+      isRegular = true;
+    } else if (minInterval >= 28 && maxInterval <= 32 && intervalStdDev <= 2.0) {
+      freq = "monthly";
+      isRegular = true;
+    } else {
+      // Irregular, spaced observations (e.g. 25 observations over 145 days)
+      freq = "irregular";
+      isRegular = false;
+      continuityScore = Math.max(0.4, Math.round((1 - intervalStdDev / Math.max(avgInterval, 1)) * 100) / 100);
+    }
+  }
+
+  let granularityLabel = "irregular observations";
+  let timeSpanDescription = `${sorted.length} observations spanning ${first.displayLabel} to ${last.displayLabel}`;
+
+  if (freq === "daily" && isRegular) {
+    granularityLabel = "daily periods";
+    timeSpanDescription = `${sorted.length} daily periods from ${first.displayLabel} through ${last.displayLabel}`;
+  } else if (freq === "weekly" && isRegular) {
+    granularityLabel = "weekly periods";
+    timeSpanDescription = `${sorted.length} weekly periods from ${first.displayLabel} through ${last.displayLabel}`;
+  } else if (freq === "monthly" && isRegular) {
+    granularityLabel = "monthly periods";
+    timeSpanDescription = `${sorted.length} monthly periods from ${first.displayLabel} through ${last.displayLabel}`;
+  } else if (freq === "quarterly" && isRegular) {
+    granularityLabel = "quarterly periods";
+    timeSpanDescription = `${sorted.length} quarterly periods from ${first.displayLabel} through ${last.displayLabel}`;
+  } else if (freq === "yearly" && isRegular) {
+    granularityLabel = "yearly periods";
+    timeSpanDescription = `${sorted.length} yearly periods from ${first.displayLabel} through ${last.displayLabel}`;
+  } else {
+    granularityLabel = "irregular observations";
+    timeSpanDescription = `${sorted.length} observations spanning ${first.displayLabel} to ${last.displayLabel}`;
+  }
+
+  return {
+    frequency: freq,
+    isRegular,
+    averageIntervalDays: Math.round(avgInterval * 10) / 10,
+    minIntervalDays: minInterval,
+    maxIntervalDays: maxInterval,
+    continuityScore,
+    granularityLabel,
+    timeSpanDescription,
+    duplicateTimestampsCount: duplicateCount,
+    spanDays,
+  };
+}
+
 export function generateFuturePeriods(
   lastPeriod: NormalizedPeriod,
   count: number = 6,
-  frequency: "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular" = "monthly"
+  frequency: "hourly" | "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular" = "monthly"
 ): { raw: string; displayLabel: string; sortKey: number }[] {
   const future: { raw: string; displayLabel: string; sortKey: number }[] = [];
   let currYear = lastPeriod.year;
   let currMonth = lastPeriod.month || 1;
   let currQuarter = lastPeriod.quarter || Math.ceil(currMonth / 3);
+
+  // If irregular, do NOT invent calendar months! Generate clean projected periods
+  if (frequency === "irregular") {
+    for (let i = 1; i <= count; i++) {
+      future.push({
+        raw: `Proj +${i}`,
+        displayLabel: `Proj +${i}`,
+        sortKey: lastPeriod.sortKey + i * 100,
+      });
+    }
+    return future;
+  }
 
   const rawSample = lastPeriod.raw;
   const isHyphenAbbr = /^[a-zA-Z]{3}-\d{4}$/.test(rawSample);

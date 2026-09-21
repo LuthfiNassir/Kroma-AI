@@ -1,4 +1,4 @@
-﻿import {
+import {
   ChartDataSeries,
   ChartType,
   DatasetIntelligenceProfile,
@@ -6,6 +6,25 @@
 } from "./types";
 import { parseDatePeriod } from "./temporalUtils";
 import { calculateDeterministicForecast } from "./forecastEngine";
+
+// Downsamples large continuous time series to keep Recharts rendering at 60fps
+export function downsampleTimeSeries<T extends { label: string; [key: string]: any }>(
+  points: T[],
+  maxPoints: number = 350
+): T[] {
+  if (points.length <= maxPoints) return points;
+
+  const step = (points.length - 2) / (maxPoints - 2);
+  const sampled: T[] = [points[0]];
+
+  for (let i = 1; i < maxPoints - 1; i++) {
+    const idx = Math.floor(i * step);
+    sampled.push(points[idx]);
+  }
+
+  sampled.push(points[points.length - 1]);
+  return sampled;
+}
 
 // Linear Projection Trajectory Generator using real future periods
 export function generateTrajectorySeries(
@@ -96,7 +115,7 @@ export function buildVisualizationCards(
     const dateCol = temporal.dateColumn;
 
     // 1. HERO CHART: Primary Metric Growth Over Time
-    const timePoints: { raw: string; displayLabel: string; sortKey: number; value: number }[] = [];
+    const timePoints: { raw: string; displayLabel: string; sortKey: number; value: number; row: Record<string, any> }[] = [];
 
     data.forEach((r) => {
       const raw = r[dateCol];
@@ -108,6 +127,7 @@ export function buildVisualizationCards(
           displayLabel: parsed.displayLabel,
           sortKey: parsed.sortKey,
           value: val,
+          row: r,
         });
       }
     });
@@ -134,15 +154,18 @@ export function buildVisualizationCards(
       title: `${primaryMeasure.replace(/_/g, " ")} Growth Over Time`,
       xAxisLabel: dateCol.replace(/_/g, " "),
       yAxisLabel: `${primaryMeasure.replace(/_/g, " ")} (${isCurrency ? "$" : "Units"})`,
-      data: timePoints.map((p) => ({
-        label: p.displayLabel,
-        value: p.value,
-      })),
+      data: downsampleTimeSeries(
+        timePoints.map((p) => ({
+          label: p.displayLabel,
+          value: p.value,
+        })),
+        350
+      ),
       xKey: "label",
       yKey: "value",
       analysis: {
-        whatItShows: `This chart tracks how monthly ${primaryMeasure.replace(/_/g, " ")} changed over ${timePoints.length} observed periods from ${firstPoint.displayLabel} through ${lastPoint.displayLabel}.`,
-        mainFinding: `${primaryMeasure.replace(/_/g, " ")} ${deltaGrowth >= 0 ? "increased" : "decreased"} by ${Math.abs(deltaGrowth)}% over the timeline, moving from ${currSymbol}${firstPoint.value.toLocaleString()} to ${currSymbol}${lastPoint.value.toLocaleString()}.`,
+        whatItShows: `This chart tracks how ${primaryMeasure.replace(/_/g, " ")} evolved across ${timePoints.length} observations from ${firstPoint.displayLabel} through ${lastPoint.displayLabel}.`,
+        mainFinding: `${primaryMeasure.replace(/_/g, " ")} shifted by ${deltaGrowth >= 0 ? "+" : ""}${deltaGrowth}% from start to latest observation, moving from ${currSymbol}${firstPoint.value.toLocaleString()} to ${currSymbol}${lastPoint.value.toLocaleString()}.`,
         whatStandsOut: [
           `Highest value reached: ${currSymbol}${peakPoint.value.toLocaleString()} in ${peakPoint.displayLabel}.`,
           `Lowest value observed: ${currSymbol}${lowPoint.value.toLocaleString()} in ${lowPoint.displayLabel}.`,
@@ -153,16 +176,16 @@ export function buildVisualizationCards(
         keyStats: [
           { label: "Starting Value", value: `${currSymbol}${firstPoint.value.toLocaleString()}` },
           { label: "Latest Value", value: `${currSymbol}${lastPoint.value.toLocaleString()}` },
-          { label: "Total Growth", value: `${deltaGrowth >= 0 ? "+" : ""}${deltaGrowth}%` },
-          { label: "Time Span", value: `${timePoints.length} periods` },
+          { label: "Endpoint Change", value: `${deltaGrowth >= 0 ? "+" : ""}${deltaGrowth}%` },
+          { label: "Time Span", value: `${timePoints.length} observations` },
         ],
-        whyItMatters: `Reviewing the full timeline shows whether performance has maintained consistent upward momentum or encountered volatility.`,
-        takeaway: `Overall, ${primaryMeasure.replace(/_/g, " ")} shows a strong ${deltaGrowth >= 0 ? "upward" : "downward"} trajectory across the historical record.`,
-        trend: `${deltaGrowth >= 0 ? "+" : ""}${deltaGrowth}% net change across ${timePoints.length} months.`,
+        whyItMatters: `Reviewing the full timeline shows whether performance has maintained consistent upward momentum or encountered intermediate volatility.`,
+        takeaway: `Overall, ${primaryMeasure.replace(/_/g, " ")} demonstrates an ${deltaGrowth >= 0 ? "expanding" : "contracting"} trajectory over the observation history.`,
+        trend: `${deltaGrowth >= 0 ? "+" : ""}${deltaGrowth}% endpoint change across ${timePoints.length} observations.`,
         technicalDetails: [
           { label: "Timeframe", value: `${firstPoint.displayLabel} to ${lastPoint.displayLabel}` },
           { label: "Observations", value: `${timePoints.length} points` },
-          { label: "Average Monthly Change", value: `${growth?.averagePeriodicGrowthPct || 0}%` },
+          { label: "Average Periodic Change", value: `${growth?.averagePeriodicGrowthPct || 0}%` },
         ],
       },
     });
@@ -172,99 +195,182 @@ export function buildVisualizationCards(
     if (secondaryMeasures.length > 0) {
       const sec1 = secondaryMeasures[0];
       const sec2 = secondaryMeasures[1];
+      const allActiveMeasures = [primaryMeasure, sec1, ...(sec2 ? [sec2] : [])];
 
+      // Check scale disparity across measures (e.g. Revenue/Cost ~9000 vs Units ~16 -> 560x disparity)
+      const metricMaxMap: Record<string, number> = {};
+      const metricFirstMap: Record<string, number> = {};
+
+      allActiveMeasures.forEach((m) => {
+        const vals = data.map((r) => Number(r[m])).filter((v) => !isNaN(v) && isFinite(v));
+        metricMaxMap[m] = vals.length > 0 ? Math.max(...vals) : 1;
+        const firstVal = vals[0] !== undefined && vals[0] > 0 ? vals[0] : 1;
+        metricFirstMap[m] = firstVal;
+      });
+
+      const maxScales = Object.values(metricMaxMap).filter((v) => v > 0);
+      const scaleDisparityRatio = maxScales.length >= 2
+        ? Math.max(...maxScales) / Math.max(Math.min(...maxScales), 0.0001)
+        : 1;
+
+      const isRadicallyDifferentScale = scaleDisparityRatio > 4.0;
+
+      // O(N) optimized lookup without nested data.find
       const multiData = timePoints.map((tp) => {
-        const row = data.find((r) => {
-          const parsed = parseDatePeriod(r[dateCol]);
-          return parsed && parsed.sortKey === tp.sortKey;
-        });
+        const row = tp.row;
+
         const obj: Record<string, any> = {
           label: tp.displayLabel,
-          [primaryMeasure]: tp.value,
         };
-        if (sec1 && row) obj[sec1] = Number(row[sec1]) || 0;
-        if (sec2 && row) obj[sec2] = Number(row[sec2]) || 0;
+
+        if (isRadicallyDifferentScale) {
+          // Option A: Normalized Indexed Comparison (First Observation = 100)
+          const rawPrimary = tp.value;
+          const pBase = metricFirstMap[primaryMeasure] || 1;
+          obj[primaryMeasure] = Math.round((rawPrimary / pBase) * 1000) / 10;
+
+          if (sec1 && row) {
+            const rawSec1 = Number(row[sec1]) || 0;
+            const s1Base = metricFirstMap[sec1] || 1;
+            obj[sec1] = Math.round((rawSec1 / s1Base) * 1000) / 10;
+          }
+          if (sec2 && row) {
+            const rawSec2 = Number(row[sec2]) || 0;
+            const s2Base = metricFirstMap[sec2] || 1;
+            obj[sec2] = Math.round((rawSec2 / s2Base) * 1000) / 10;
+          }
+        } else {
+          // Raw scale comparison when within 4x ratio
+          obj[primaryMeasure] = tp.value;
+          if (sec1 && row) obj[sec1] = Number(row[sec1]) || 0;
+          if (sec2 && row) obj[sec2] = Number(row[sec2]) || 0;
+        }
+
         return obj;
       });
 
-      const secTitle = sec2
-        ? `${primaryMeasure.replace(/_/g, " ")}, ${sec1.replace(/_/g, " ")}, and ${sec2.replace(/_/g, " ")} Over Time`
-        : `${primaryMeasure.replace(/_/g, " ")} and ${sec1.replace(/_/g, " ")} Trajectory`;
+      const secTitle = isRadicallyDifferentScale
+        ? sec2
+          ? `${primaryMeasure.replace(/_/g, " ")}, ${sec1.replace(/_/g, " ")}, and ${sec2.replace(/_/g, " ")} Indexed Comparison`
+          : `${primaryMeasure.replace(/_/g, " ")} and ${sec1.replace(/_/g, " ")} Indexed Comparison`
+        : sec2
+          ? `${primaryMeasure.replace(/_/g, " ")}, ${sec1.replace(/_/g, " ")}, and ${sec2.replace(/_/g, " ")} Over Time`
+          : `${primaryMeasure.replace(/_/g, " ")} and ${sec1.replace(/_/g, " ")} Trajectory`;
 
       charts.push({
         id: "chart_multi_metric_trajectory",
         type: "line",
         title: secTitle,
         xAxisLabel: dateCol.replace(/_/g, " "),
-        yAxisLabel: "Metric Values",
+        yAxisLabel: isRadicallyDifferentScale ? "Metric Index (Base = 100)" : "Metric Values",
+        isIndexed: isRadicallyDifferentScale,
         data: multiData,
         xKey: "label",
         analysis: {
-          whatItShows: `This chart compares how ${primaryMeasure.replace(/_/g, " ")} progressed alongside ${secondaryMeasures.map((s) => s.replace(/_/g, " ")).join(" and ")} across each period.`,
-          mainFinding: `Supporting business metrics tracked in close alignment with ${primaryMeasure.replace(/_/g, " ")} throughout the timeline.`,
-          whatStandsOut: [
-            `All tracked metrics show consistent direction across the ${multiData.length} monthly observations.`,
-            `When ${primaryMeasure.replace(/_/g, " ")} peaked in ${peakPoint.displayLabel}, supporting indicators also registered elevated volume.`,
-          ],
+          whatItShows: isRadicallyDifferentScale
+            ? `This chart normalizes ${allActiveMeasures.map((s) => s.replace(/_/g, " ")).join(", ")} to a common base index (First Observation = 100) to allow meaningful trajectory comparison despite radically different measurement scales (scale ratio: ${Math.round(scaleDisparityRatio)}x).`
+            : `This chart compares how ${primaryMeasure.replace(/_/g, " ")} progressed alongside ${secondaryMeasures.map((s) => s.replace(/_/g, " ")).join(" and ")} across each period.`,
+          mainFinding: isRadicallyDifferentScale
+            ? `Tracking indexed trajectories resolves scale flattening, confirming relative momentum and co-movement across volume and financial measures.`
+            : `Supporting business metrics tracked in close alignment with ${primaryMeasure.replace(/_/g, " ")} throughout the timeline.`,
+          whatStandsOut: isRadicallyDifferentScale
+            ? [
+                `All metrics are normalized to 100 at the initial observation (${timePoints[0]?.displayLabel || "Start"}).`,
+                `Comparing indexed trajectories highlights whether operational volume (like Units) paced in tandem with financial results (like Revenue).`,
+                `Resolves visualization compression caused by combining large monetary values with unit counts on a single axis.`,
+              ]
+            : [
+                `All tracked metrics show consistent direction across the ${multiData.length} observations.`,
+                `When ${primaryMeasure.replace(/_/g, " ")} peaked in ${peakPoint.displayLabel}, supporting indicators also registered elevated volume.`,
+              ],
           keyStats: [
+            { label: "Scale Normalization", value: isRadicallyDifferentScale ? "Base 100 Index" : "Raw Units" },
             { label: "Primary Metric", value: primaryMeasure.replace(/_/g, " ") },
             { label: "Supporting Metric", value: sec1.replace(/_/g, " ") },
-            { label: "Observations", value: `${multiData.length} months` },
-            { label: "Metrics Tracked", value: `${secondaryMeasures.length + 1} measures` },
+            { label: "Observations", value: `${multiData.length} periods` },
           ],
-          whyItMatters: `Monitoring supporting volume indicators alongside revenue ensures that top-line growth is backed by underlying customer and order activity.`,
-          takeaway: `Growth in ${primaryMeasure.replace(/_/g, " ")} was accompanied by proportional increases in supporting operational measures.`,
+          whyItMatters: `Monitoring supporting volume indicators alongside revenue ensures that top-line growth is backed by underlying activity rather than price variance alone.`,
+          takeaway: `Indexed normalization reveals clear proportional alignment across all active metrics.`,
         },
       });
     }
 
-    // 3. RELATIONSHIP SCATTER CHART (If 2+ Measures Exist)
+    // 3. RELATIONSHIP SCATTER CHART (Driver on X, Outcome on Y, Non-Causal Semantics)
     if (measures.length >= 2) {
-      const relMeasure = secondaryMeasures.find((m) => m.toLowerCase().includes("spend") || m.toLowerCase().includes("order")) || secondaryMeasures[0];
+      // Prioritize volume/count drivers (Units, Orders, Quantity) over spend drivers (Cost, Spend)
+      const isVolumeDriver = (name: string) => /\b(units?|orders?|quantity|items?|volume|count)\b/i.test(name);
+      const isSpendDriver = (name: string) => /\b(spend|cost|expense|budget|investment)\b/i.test(name);
+      const isOutcomeName = (name: string) => /\b(revenue|sales|profit|margin|income|fare|amount)\b/i.test(name);
+
+      let xMetric = secondaryMeasures[0] || measures[1];
+      let yMetric = primaryMeasure;
+
+      // Ensure driver is on X and outcome is on Y
+      const volumeCandidate = measures.find(isVolumeDriver);
+      const spendCandidate = measures.find(isSpendDriver);
+      const outcomeCandidate = measures.find(isOutcomeName);
+      const driverCandidate = volumeCandidate || spendCandidate;
+
+      if (driverCandidate && outcomeCandidate && driverCandidate !== outcomeCandidate) {
+        xMetric = driverCandidate;
+        yMetric = outcomeCandidate;
+      } else if (secondaryMeasures.some(isVolumeDriver)) {
+        xMetric = secondaryMeasures.find(isVolumeDriver)!;
+        yMetric = primaryMeasure;
+      } else if (secondaryMeasures.some(isSpendDriver)) {
+        xMetric = secondaryMeasures.find(isSpendDriver)!;
+        yMetric = primaryMeasure;
+      }
+
       const corrRel = relationships.find(
         (r) =>
           r.type === "numeric_correlation" &&
-          ((r.sourceColumn === primaryMeasure && r.targetColumn === relMeasure) ||
-           (r.sourceColumn === relMeasure && r.targetColumn === primaryMeasure))
+          ((r.sourceColumn === yMetric && r.targetColumn === xMetric) ||
+           (r.sourceColumn === xMetric && r.targetColumn === yMetric))
       );
 
       const scatterData = data
         .map((r, idx) => {
           const parsed = parseDatePeriod(r[dateCol]);
           return {
-            x: Number(r[relMeasure]) || 0,
-            y: Number(r[primaryMeasure]) || 0,
+            x: Number(r[xMetric]) || 0,
+            y: Number(r[yMetric]) || 0,
             label: parsed ? parsed.displayLabel : `Period ${idx + 1}`,
           };
         })
         .filter((p) => !isNaN(p.x) && !isNaN(p.y));
 
       const rStrength = corrRel ? corrRel.strength : 0.85;
-      const strengthWord = Math.abs(rStrength) >= 0.7 ? "closely" : "moderately";
+      const strengthDesc = Math.abs(rStrength) >= 0.7 ? "strong" : "moderate";
+      const isXCurrency = /\b(spend|cost|revenue|sales|profit|price|budget|salary)\b/i.test(xMetric);
+      const isYCurrency = /\b(revenue|sales|profit|price|budget|spend|cost|fare|salary)\b/i.test(yMetric);
+
+      const xUnitLabel = isXCurrency ? "$" : "Count";
+      const yUnitLabel = isYCurrency ? "$" : "Units";
 
       charts.push({
         id: "chart_relationship_scatter",
         type: "scatter",
-        title: `${relMeasure.replace(/_/g, " ")} and ${primaryMeasure.replace(/_/g, " ")} Move Together`,
-        xAxisLabel: `${relMeasure.replace(/_/g, " ")} (${relMeasure.toLowerCase().includes("spend") ? "$" : "Units"})`,
-        yAxisLabel: `${primaryMeasure.replace(/_/g, " ")} (${isCurrency ? "$" : "Units"})`,
+        title: `${xMetric.replace(/_/g, " ")} and ${yMetric.replace(/_/g, " ")} Statistical Association`,
+        xAxisLabel: `${xMetric.replace(/_/g, " ")} (${xUnitLabel})`,
+        yAxisLabel: `${yMetric.replace(/_/g, " ")} (${yUnitLabel})`,
         data: scatterData,
         analysis: {
-          whatItShows: `This chart plots ${relMeasure.replace(/_/g, " ")} against ${primaryMeasure.replace(/_/g, " ")} for each month to examine whether the two numbers move together.`,
-          mainFinding: `Months with higher ${relMeasure.replace(/_/g, " ")} consistently recorded higher ${primaryMeasure.replace(/_/g, " ")} (${strengthWord} positive relationship).`,
+          whatItShows: `This chart plots ${xMetric.replace(/_/g, " ")} on the horizontal driver axis against ${yMetric.replace(/_/g, " ")} on the vertical outcome axis across observations to evaluate whether they move together.`,
+          mainFinding: `${xMetric.replace(/_/g, " ")} and ${yMetric.replace(/_/g, " ")} are positively associated (r = ${rStrength.toFixed(2)}, ${strengthDesc} positive association).`,
           whatStandsOut: [
-            `The two measures exhibit a strong statistical association across all ${scatterData.length} periods.`,
-            `Co-occurrence indicates that investments in ${relMeasure.replace(/_/g, " ")} coincided with higher revenue periods.`,
-            `Statistical association shows that these numbers move together, but the data alone cannot prove that one directly causes the other.`,
+            `Observations with higher ${xMetric.replace(/_/g, " ")} consistently coincide with higher ${yMetric.replace(/_/g, " ")}.`,
+            `NON-CAUSAL NOTE: While these metrics track together closely, statistical correlation alone cannot confirm that changes in ${xMetric.replace(/_/g, " ")} directly caused ${yMetric.replace(/_/g, " ")}.`,
+            `Strong linear alignment across ${scatterData.length} observations indicates steady operational efficiency.`,
           ],
           keyStats: [
-            { label: "Comparison Metric", value: relMeasure.replace(/_/g, " ") },
-            { label: "Target Metric", value: primaryMeasure.replace(/_/g, " ") },
-            { label: "Movement", value: "Positive relationship" },
-            { label: "Months Analyzed", value: `${scatterData.length} months` },
+            { label: "Driver Metric (X)", value: `${xMetric.replace(/_/g, " ")} (${xUnitLabel})` },
+            { label: "Outcome Metric (Y)", value: `${yMetric.replace(/_/g, " ")} (${yUnitLabel})` },
+            { label: "Association Strength", value: `r = ${rStrength.toFixed(2)} (Positive)` },
+            { label: "Observations Analyzed", value: `${scatterData.length} points` },
           ],
-          whyItMatters: `Understanding how numbers move together helps evaluate whether promotional or operational activity tracks with revenue outcomes.`,
-          takeaway: `${relMeasure.replace(/_/g, " ")} and ${primaryMeasure.replace(/_/g, " ")} move together closely in this dataset.`,
+          whyItMatters: `Evaluating how volume indicators track with revenue outcomes helps monitor consistency without making unfounded causal claims.`,
+          takeaway: `${xMetric.replace(/_/g, " ")} and ${yMetric.replace(/_/g, " ")} exhibit strong contemporaneous statistical association.`,
           technicalDetails: [
             { label: "Correlation Coefficient", value: rStrength.toFixed(3) },
             { label: "Sample Size", value: `${scatterData.length} observations` },
@@ -274,8 +380,8 @@ export function buildVisualizationCards(
       });
     }
 
-    // 4. DEDICATED 6-MONTH FORECAST CHART
-    const forecast = profile.forecast || calculateDeterministicForecast(data, dateCol, primaryMeasure, 6);
+    // 4. DEDICATED FORECAST CHART (Accurate Suitability & Exploratory Badging)
+    const forecast = profile.forecast || calculateDeterministicForecast(data, dateCol, primaryMeasure, 6, temporal);
     if (forecast && forecast.forecastSeries.length > 0) {
       const forecastChartData: Record<string, any>[] = [];
 
@@ -305,31 +411,43 @@ export function buildVisualizationCards(
         });
       });
 
+      const isExploratory = forecast.isExploratory || !temporal.isRegular;
+      const forecastChartTitle = isExploratory
+        ? `${primaryMeasure.replace(/_/g, " ")} — 6-Period Directional Projection`
+        : `${primaryMeasure.replace(/_/g, " ")} — Actual + 6 Month Forecast`;
+
       charts.push({
         id: "chart_dedicated_forecast",
         type: "line",
-        title: `${primaryMeasure.replace(/_/g, " ")} — Actual + 6 Month Forecast`,
-        xAxisLabel: dateCol.replace(/_/g, " "),
+        title: forecastChartTitle,
+        xAxisLabel: isExploratory ? "Observation / Projected Period" : dateCol.replace(/_/g, " "),
         yAxisLabel: `${primaryMeasure.replace(/_/g, " ")} (${isCurrency ? "$" : "Units"})`,
         data: forecastChartData,
         xKey: "label",
         isForecastChart: true,
+        isExploratoryForecast: isExploratory,
+        forecastBadge: isExploratory ? "DIRECTIONAL PROJECTION (IRREGULAR TIMELINE)" : undefined,
         analysis: {
-          whatItShows: `This chart displays historical ${primaryMeasure.replace(/_/g, " ")} alongside a 6-month deterministic projection through ${forecast.forecastSeries[forecast.forecastSeries.length - 1].displayLabel}.`,
+          whatItShows: isExploratory
+            ? `This chart displays historical ${primaryMeasure.replace(/_/g, " ")} alongside a 6-period directional projection. Because observation intervals in the dataset are irregular, forward estimates represent directional trajectory rather than fixed calendar months.`
+            : `This chart displays historical ${primaryMeasure.replace(/_/g, " ")} alongside a 6-month deterministic projection through ${forecast.forecastSeries[forecast.forecastSeries.length - 1].displayLabel}.`,
           mainFinding: forecast.explanation,
           whatStandsOut: [
             `Current baseline: ${currSymbol}${Math.round(forecast.baseline).toLocaleString()} in ${lastHist.displayLabel}.`,
-            `Projected 6-month target: ${currSymbol}${Math.round(forecast.forecastSeries[forecast.forecastSeries.length - 1].forecastValue).toLocaleString()} in ${forecast.forecastSeries[forecast.forecastSeries.length - 1].displayLabel}.`,
-            `Projected change: ${forecast.projectedGrowthPct >= 0 ? "+" : ""}${forecast.projectedGrowthPct}% over the next six months.`,
+            `Projected target (+6 periods): ${currSymbol}${Math.round(forecast.forecastSeries[forecast.forecastSeries.length - 1].forecastValue).toLocaleString()} in ${forecast.forecastSeries[forecast.forecastSeries.length - 1].displayLabel}.`,
+            `Projected change: ${forecast.projectedGrowthPct >= 0 ? "+" : ""}${forecast.projectedGrowthPct}% continuation based on historical momentum.`,
+            isExploratory
+              ? `Note: Historical observations have irregular date gaps (avg interval: ${Math.round(temporal.averageIntervalDays || 0)} days); treat as directional guidance.`
+              : `95% confidence interval is computed from historical residual standard error.`,
           ],
           keyStats: [
             { label: "Current Baseline", value: `${currSymbol}${Math.round(forecast.baseline).toLocaleString()}` },
-            { label: "6-Month Target", value: `${currSymbol}${Math.round(forecast.forecastSeries[forecast.forecastSeries.length - 1].forecastValue).toLocaleString()}` },
-            { label: "Projected Direction", value: forecast.trendDirection === "increasing" ? "Upward growth" : "Stable" },
-            { label: "Horizon", value: "6 future months" },
+            { label: "Projected Target", value: `${currSymbol}${Math.round(forecast.forecastSeries[forecast.forecastSeries.length - 1].forecastValue).toLocaleString()}` },
+            { label: "Classification", value: isExploratory ? "Directional Projection" : "Deterministic Forecast" },
+            { label: "Horizon", value: "6 future periods" },
           ],
-          whyItMatters: `Deterministic forecasting projects the continuation of current trends, helping plan future resource allocation and targets.`,
-          takeaway: `Based on historical momentum, ${primaryMeasure.replace(/_/g, " ")} is estimated to continue growing over the next 6 months.`,
+          whyItMatters: `Directional projections project historical velocity forward to assist in planning and baseline expectation setting.`,
+          takeaway: `Based on historical momentum, ${primaryMeasure.replace(/_/g, " ")} is estimated to continue on an ${forecast.trendDirection === "increasing" ? "upward" : "adjusted"} trajectory.`,
           technicalDetails: [
             { label: "Forecasting Method", value: forecast.method },
             { label: "Confidence Interval", value: forecast.confidenceLevel },

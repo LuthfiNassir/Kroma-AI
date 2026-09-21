@@ -1,6 +1,6 @@
 {
-  "name": "ai-data-analyst",
-  "version": "0.1.0",
+  "name": "kroma",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -12,7 +12,7 @@
     "tauri": "tauri",
     "desktop:clean": "rimraf src-tauri/target out .next .next-dev",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "node scripts/safe-desktop-build.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

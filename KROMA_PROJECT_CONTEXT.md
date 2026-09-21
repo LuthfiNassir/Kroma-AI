@@ -433,12 +433,28 @@ npm run lint
   3. **Zero Fabricated Dimensions:** Removed all synthetic "General" fallbacks. When categorical columns do not exist, `dimensions` is strictly empty (`[]`), and segmentation/cohort/breakdown capabilities are deterministically disabled.
   4. **Grounding & Anti-Hallucination (`lib/ollama.ts`):** Transferred all mathematical computation to TypeScript. The LLM prompt is injected with pre-calculated growth rates, exact period changes (e.g. March to April 2026: $76,100 -> $74,800, -1.7%), and strict non-causal instructions (metrics moving contemporaneously must be reported as co-occurrence, never causation).
   5. **Structured Action Dispatcher (`components/Workspace.tsx`):** Integrated live execution of structured actions (`REFRESH_DASHBOARD`, `FOCUS_ANALYSIS`, `SHOW_FORECAST`, `SHOW_SOURCE_DATA`, `NEW_ANALYSIS`) with deterministic client-side fallbacks when Ollama is unavailable or offline.
-  6. **Human-Friendly Editorial Explanations (`components/ChartModal.tsx`):** Restructured narrative presentations to lead with plain-English insights, actionable takeaways, and a collapsible `[Technical Details]` section for statistical jargon (r-value, confidence level, methodology).
-- **Affected Files:** `lib/temporalUtils.ts`, `lib/forecastEngine.ts`, `lib/dataIntelligence.ts`, `lib/capabilityEngine.ts`, `lib/visualizationEngine.ts`, `lib/dashboardEngine.ts`, `lib/ollama.ts`, `components/Workspace.tsx`, `components/ChartModal.tsx`, `components/ChartCard.tsx`, `components/DataTable.tsx`.
+### ADR-007: Phase-Isolated Build Directories & Dev/Build Collision Hardening
+- **Status:** Approved & Implemented (2026-09-18)
+- **Context:** Running `next build` concurrently with an active `next dev` background process historically deleted and regenerated `.next/` using production chunk hashes. Because `next dev` kept serving HTML referencing development chunk URIs (`/_next/static/css/app/layout.css` and `/_next/static/chunks/main-app.js`), the browser received HTTP 404s for stylesheets and scripts, causing the page to degrade into unstyled, raw HTML with default serif fonts and no JavaScript hydration.
+- **Decision:**
+  1. **Phase-Isolated Build Directories (`next.config.mjs`):** Configured dynamic `distDir: isDev ? ".next-dev" : ".next"` based on `phase === PHASE_DEVELOPMENT_SERVER`. `next dev` now writes and reads exclusively from `.next-dev/`, while `next build` operates in `.next/` and exports to `out/`. A concurrent production build can never mutate or delete the live dev server's assets.
+  2. **Automated Asset Health Diagnostic (`scripts/verify-assets.mjs` / `npm run check:assets`):** Built a programmatic verification tool that fetches `http://127.0.0.1:3000/`, extracts all `<link rel="stylesheet">` and `<script>` chunks, asserts HTTP 200, checks for non-truncation (>500 bytes), and verifies essential Kroma CSS design tokens (`--bg-canvas`, `--accent-coral`, Tailwind rules).
+  3. **Safe Process Launcher (`scripts/safe-dev.mjs`):** Implemented a port-aware launcher that verifies port 3000 availability, detects responsive existing instances to prevent duplicate zombie processes, and gracefully handles process lifecycle.
+  4. **Favicon Collision Resolution:** Removed duplicate `app/favicon.ico` which collided with Next.js App Router metadata handlers and `public/favicon.ico`, eliminating internal 500 routing crashes.
+- **Affected Files:** [`next.config.mjs`](file:///c:/Users/luthf/Downloads/DataAnalyst/next.config.mjs), [`package.json`](file:///c:/Users/luthf/Downloads/DataAnalyst/package.json), [`.gitignore`](file:///c:/Users/luthf/Downloads/DataAnalyst/.gitignore), [`scripts/verify-assets.mjs`](file:///c:/Users/luthf/Downloads/DataAnalyst/scripts/verify-assets.mjs), [`scripts/safe-dev.mjs`](file:///c:/Users/luthf/Downloads/DataAnalyst/scripts/safe-dev.mjs).
+
+---
 
 ## 15. Project Changelog
 
-### 2026-09-17 (Engine v2 Upgrade)
+### 2026-09-18 (Stability & Dev/Build Collision Hardening)
+- **Added:** Phase-isolated `distDir` in `next.config.mjs` separating development (`.next-dev/`) from production build (`.next/`), guaranteeing zero artifact collisions.
+- **Added:** Automated asset health diagnostic script `scripts/verify-assets.mjs` (`npm run check:assets`) verifying HTTP 200, CSS chunk integrity, and brand token presence.
+- **Added:** Safe development server launcher `scripts/safe-dev.mjs` preventing duplicate dev server processes on port 3000.
+- **Fixed:** Eliminated unstyled HTML regressions caused by running `next build` during active development.
+- **Fixed:** Removed redundant `app/favicon.ico` preventing App Router 500 metadata errors.
+- **Updated:** `package.json` with `dev:clean`, `desktop:clean`, and `check:assets` scripts.
+- **Updated:** `.gitignore` with `/.next-dev/`.
 - **Added:** Deterministic calendar and temporal parser in `lib/temporalUtils.ts` fixing timezone offsets and preventing 2-digit integers (e.g. Age) from false date matches.
 - **Added:** Deterministic 6-month forecasting engine in `lib/forecastEngine.ts` with OLS regression, 95% confidence bounds, and plain English explanation generator.
 - **Added:** Growth intelligence module calculating period-over-period changes, growth streaks, and identifying exact dips and peaks.
@@ -475,6 +491,9 @@ Project:                 Kroma Autonomous Data Analyst
 Platform:                Windows Desktop Native & Web
 Desktop Framework:       Tauri v2 (Rust + WebView2)
 Frontend:                Next.js 14 App Router (Static Export) + TypeScript + Tailwind CSS
+Build Isolation:         Phase-Isolated (.next-dev for dev, .next for prod build)
+Asset Diagnostics:       Programmatic Probing (scripts/verify-assets.mjs)
+Process Hygiene:         Port 3000 Collision Prevention (scripts/safe-dev.mjs)
 Motion System:           Motion.dev / Framer Motion 13.x (Central lib/motion.ts)
 Visualization Engine:    Recharts + Custom SVG Polymorphic Renderers
 Data Engine:             Modular Dataset Intelligence (Profiling, Relationships, Capabilities, DashboardSpec)
@@ -482,8 +501,18 @@ Local LLM Runtime:       Ollama (http://127.0.0.1:11434 / qwen2.5-coder:7b)
 Visual Direction:        Watermelon UI (Dark Editorial Creative-Tech)
 Emoji Policy:            STRICT ZERO EMOJIS
 Primary Brand Colors:    Canvas #212222, Card #18191b, Coral #C86342, Orchid #A5329E, White #FFFFFF
-Last Context Update:     2026-09-18 (Brand Accent #C86342 & Sidebar Interaction)
+Last Context Update:     2026-09-18 (Stability & Dev/Build Collision Hardening)
 ```
+
+### 16.1 Known Issues & Technical Debt
+
+| Item | Status | Impact / Root Cause | Resolution / Workaround |
+| :--- | :--- | :--- | :--- |
+| **Dev/Build `.next` Collision** | **RESOLVED** | Concurrent `next build` wiped active `next dev` files, causing 404 on CSS/JS. | Implemented phase-isolated `distDir` (`.next-dev` vs `.next`) in `next.config.mjs`. |
+| **Favicon Metadata Collision** | **RESOLVED** | Duplicate `app/favicon.ico` clashed with App Router and `public/favicon.ico`, throwing 500. | Removed redundant `app/favicon.ico`; static icon served from `public/favicon.ico`. |
+| **Duplicate Dev Server Processes** | **RESOLVED** | Zombie or duplicate `next dev` background instances binding to port 3000. | Safe dev launcher `scripts/safe-dev.mjs` checks port 3000 and reuse before spawning. |
+| **Chart Touchpad Zoom Propagation** | **RESOLVED** | Wheel zoom inside chart canvas could zoom entire outer browser window. | Attached non-passive wheel listener to `chartCanvasRef` calling `e.preventDefault()`. |
+| **Dashboard Whitespace Gaps** | **RESOLVED** | Odd-numbered chart counts left empty grid slots. | Implemented 12-column mathematically dynamic row spanning in `components/BentoGrid.tsx`. |
 
 ---
 
@@ -504,7 +533,8 @@ Last Context Update:     2026-09-18 (Brand Accent #C86342 & Sidebar Interaction)
 ### 17.3 Post-Change Protocol
 1. Run `npm run lint` and `npm run build` to verify clean compilation.
 2. Verify that the application continues to build under `output: "export"`.
-3. **Update `KROMA_PROJECT_CONTEXT.md`:**
+3. Run `npm run check:assets` while dev server is running to verify stylesheet and chunk integrity.
+4. **Update `KROMA_PROJECT_CONTEXT.md`:**
    - Update **Current Project State**.
    - Add an entry to the **Architecture & Design Decision Log** for major decisions.
    - Add an entry to the **Project Changelog**.
@@ -522,16 +552,79 @@ When encountering conflicting requirements or instructions, resolve in the follo
 
 ---
 
-## 18. Frontend Build & Styling Invariants
+## 18. Development Stability & Build Invariants
 
-### 18.1 Root Cause Analysis: Dev Server / Build Cache Collision
-A critical styling breakdown previously occurred where the browser rendered raw, unstyled HTML (white background, serif fonts, no CSS). The exact root cause:
-1. A background `next dev` server process was running while a separate task executed `npm run build` (`next build`).
-2. Next.js's production build wiped and regenerated the `.next/` directory with production hashes.
-3. The running development server in memory attempted to serve development bundles (`/_next/static/css/app/layout.css` and `/_next/static/chunks/main-app.js`) that had been clobbered on disk, returning **HTTP 404** for all stylesheet and script requests.
-4. **Permanent Invariant Rule:** Never run `npm run build` while `next dev` is running concurrently in the same workspace. If `.next` ever desynchronizes or returns 404 for CSS chunks, stop the server, execute `Remove-Item -Recurse -Force .next`, and restart `npm run dev` (or use `npm run dev:clean`).
+### 18.1 Historical `.next` Collision Problem & Root Cause
+In previous iterations, the application randomly degraded into completely unstyled, broken HTML (pure white background, default Times New Roman / serif browser fonts, native gray form buttons, unstyled table rows, and no JavaScript interaction).
 
-### 18.2 Core Styling Architecture
+**Root Cause:**
+1. A background `next dev` server process was running while a separate command or task executed `npm run build` (`next build`).
+2. Both commands targeted the identical `.next/` directory. Next.js production builds wipe `.next/` and write production-hashed chunk manifests.
+3. The running development server process, still loaded in Node memory, continued serving HTML referencing development chunk URIs:
+   - `/_next/static/css/app/layout.css`
+   - `/_next/static/chunks/main-app.js`
+   - `/_next/static/chunks/app/page.js`
+4. Because these development chunk files were clobbered or replaced by production files on disk, every stylesheet and client script request returned **HTTP 404**.
+5. The browser then rendered only the unstyled server-rendered HTML shell with zero CSS styling and zero React hydration.
+
+### 18.2 Phase-Isolated Build Directory Architecture
+To permanently eliminate this vulnerability without requiring manual cache wipes, Next.js is configured dynamically based on lifecycle phase in [`next.config.mjs`](file:///c:/Users/luthf/Downloads/DataAnalyst/next.config.mjs):
+
+```javascript
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
+
+/** @type {import('next').NextConfig} */
+export default (phase) => {
+  const isDev = phase === PHASE_DEVELOPMENT_SERVER;
+
+  return {
+    // Development server builds strictly into .next-dev/
+    // Production build exports strictly into .next/ and out/
+    distDir: isDev ? ".next-dev" : ".next",
+    output: "export",
+    images: { unoptimized: true },
+    trailingSlash: true,
+  };
+};
+```
+
+**Guaranteed Invariants:**
+- `next dev` writes to and reads exclusively from `.next-dev/`.
+- `next build` writes to `.next/` and generates the static export in `out/`.
+- Running `npm run build` while `next dev` is actively running CANNOT mutate, corrupt, or delete the active dev server's assets on disk.
+- `.gitignore` explicitly ignores both `/.next/` and `/.next-dev/`.
+
+### 18.3 Prescribed Development & Build Commands
+
+| Command | Purpose | Build Target | Safe During Dev? |
+| :--- | :--- | :--- | :--- |
+| `npm run dev` | Starts active Next.js development server on port 3000 | `.next-dev/` | N/A (primary) |
+| `npm run dev:clean` | Wipes both `.next` and `.next-dev` before starting dev | `.next-dev/` | Yes (fresh start) |
+| `npm run build` | Compiles optimized static export for production / Tauri | `.next/` & `out/` | **YES (Isolated)** |
+| `npm run check:assets` | Runs automated asset health probe against running server | N/A | Yes (non-destructive) |
+| `npm run desktop:dev` | Launches Tauri native desktop application in dev mode | `.next-dev/` | Yes |
+| `npm run desktop:build`| Compiles native Windows binary (`.exe`/`.msi`) via Cargo | `src-tauri/target/` | Yes |
+| `npm run desktop:clean`| Deep cleans Tauri build artifacts and Next build dirs | Clean state | No (clean tool) |
+
+### 18.4 Process Hygiene & Port Management (`scripts/safe-dev.mjs`)
+- **Port Collision Protection:** [`scripts/safe-dev.mjs`](file:///c:/Users/luthf/Downloads/DataAnalyst/scripts/safe-dev.mjs) probes port 3000 before spawning. If port 3000 is occupied by an active, healthy Kroma dev server, it logs the existing status and exits gracefully instead of launching a conflicting second server on port 3001.
+- **Process Scope:** Process cleanups strictly target project child processes. Indiscriminate killing of all Node processes on the machine is strictly forbidden.
+
+### 18.5 Automated Asset Health Diagnostic (`scripts/verify-assets.mjs`)
+The diagnostic tool programmatically checks asset integrity via HTTP without relying on visual assumptions:
+1. Performs `GET http://127.0.0.1:3000/` and asserts **HTTP 200**.
+2. Scrapes all `<link rel="stylesheet">` hrefs and asserts **HTTP 200**, file size **> 500 bytes**, and confirms presence of Kroma design tokens (`--bg-canvas`, `--accent-coral`, Tailwind CSS rules).
+3. Scrapes all `<script>` tags and asserts **HTTP 200** and non-zero body for all runtime chunks (`main-app.js`, `app-pages-internals.js`, `app/page.js`, `webpack.js`).
+4. Exits with **code 0** on verified health, **code 1** on any 404, truncation, or token absence.
+
+### 18.6 Multi-Cycle Verification Procedure
+When verifying build stability after changes, perform the following sequence:
+1. Execute `npm run check:assets` against the running development server to verify baseline asset health (HTTP 200, full stylesheet size ~58KB).
+2. Run `npm run build` in a separate terminal. Verify compilation and static page generation (6/6 pages) into `out/`.
+3. Re-run `npm run check:assets` immediately while `next dev` remains running. Assert that all development assets still return HTTP 200 and stylesheets remain completely intact.
+4. Open the browser to `http://localhost:3000` and confirm full visual styling, dark theme (`#212222`), custom fonts, and interactive motion components.
+
+### 18.7 Core Styling & Layout Invariants
 - **Global Stylesheet Location:** [`app/globals.css`](file:///c:/Users/luthf/Downloads/DataAnalyst/app/globals.css) is the single authoritative global stylesheet containing `@tailwind base; @tailwind components; @tailwind utilities;` alongside custom Kroma CSS variables (`--bg-canvas`, `--bg-surface`, `--accent-coral`, `--accent-purple`).
 - **Stylesheet Import:** Exclusively imported in [`app/layout.tsx`](file:///c:/Users/luthf/Downloads/DataAnalyst/app/layout.tsx). It must NEVER be imported in individual components or sub-routes.
 - **Tailwind Content Paths:** Configured in [`tailwind.config.js`](file:///c:/Users/luthf/Downloads/DataAnalyst/tailwind.config.js) scanning:
@@ -542,25 +635,123 @@ A critical styling breakdown previously occurred where the browser rendered raw,
 - **PostCSS Wiring:** [`postcss.config.js`](file:///c:/Users/luthf/Downloads/DataAnalyst/postcss.config.js) maps standard `tailwindcss` and `autoprefixer`.
 - **Static Export & Desktop Target:** [`next.config.mjs`](file:///c:/Users/luthf/Downloads/DataAnalyst/next.config.mjs) must always maintain `output: "export"`, `images: { unoptimized: true }`, and `trailingSlash: true` for Tauri v2 compatibility (`src-tauri/tauri.conf.json` maps `frontendDist: "../out"` and `devUrl: "http://localhost:3000"`).
 
-### 18.3 Analytical Chart Viewport & Trackpad Zoom Engine
+### 18.8 Analytical Chart Viewport & Trackpad Zoom Engine
 - **True Analytical Domain Zoom:** Built in [`lib/zoomEngine.ts`](file:///c:/Users/luthf/Downloads/DataAnalyst/lib/zoomEngine.ts) with `ChartViewport` (`zoom`, `startIndex`, `endIndex`, `xDomain`, `yDomain`). Zooming recalculates the visible data window and axes minimum/maximum ticks; it strictly avoids CSS `transform: scale`.
 - **Pointer-Anchored Focal Tracking:** Calculates `anchorRatioX = (clientX - rect.left) / rect.width`. The data point directly under the pointer remains anchored under the pointer during trackpad pinch or mouse wheel operations.
 - **Scoped Gesture Listener:** The non-passive wheel event listener is attached strictly to the inner chart plotting container DOM element (`chartCanvasRef`) inside [`components/ChartModal.tsx`](file:///c:/Users/luthf/Downloads/DataAnalyst/components/ChartModal.tsx). It calls `e.preventDefault()` only within the plotting canvas to block outer browser page zoom while allowing normal scrolling outside the canvas.
 - **Shared Viewport State:** Manual buttons (`[-]`, `[+]`, `[Reset]`), pan arrows, drag gestures, and trackpad gestures all mutate the identical `ChartViewport` state.
 - **Dashboard Isolation:** All zoom state is modal-local. When closing the modal, dashboard charts remain completely unaffected at baseline scale.
 
-### 18.4 Sidebar Header & Navigation Invariants
-- **Collapsed Sidebar (`80px` width):** Contains ONLY the horizontally centered Kroma BrandMark logo inside `h-[60px]`, matching the top navigation bar height. The separate expand arrow button (`>`) has been **completely removed**.
-- **Collapsed Logo Click Behavior:** Clicking the Kroma logo when the sidebar is collapsed **expands/opens the sidebar** (`onToggleOpen`). It does **NOT** navigate away from the current session or call `handleNavigateHome()`. The active analysis dashboard and session state remain untouched and visible.
-- **Expanded Sidebar (`288px` width):** Displays `[BrandMark + Title] [ChevronLeft]` in the header. Clicking the logo navigates to the landing page (`handleNavigateHome()`). Clicking `ChevronLeft` collapses the sidebar.
-- **Session Safety Invariant:** Clicking the logo **never** deletes a session, never clears session history, and never resets the dataset. All active sessions are preserved in Session History and can be restored at any time.
-- **Smooth Motion:** Sidebar width transitions smoothly between `80px` and `288px` using Framer Motion with cubic-bezier easing (`[0.16, 1, 0.3, 1]`), fully respecting user reduced-motion preferences.
+### 18.9 Sidebar Header & Navigation Invariants
 
-### 18.5 Bento Grid Zero-Whitespace Guarantee
+#### Expanded State (`288px` width)
+- **Header:** `[BrandMark + Title] [ChevronLeft]` — logo click navigates to landing page (`handleNavigateHome()`); chevron click collapses.
+- **Body:** Full session history list with `[Conversations]` label, session rows with contextual `⋯` menus (Rename, Change Icon, Archive, Delete).
+- **Footer:** Rounded status card `[Kroma Engine: Localhost] v1.0` with animated coral pulse dot.
+
+#### Collapsed State (`80px` width — "Navigation Rail")
+- **Header (`h-[60px]`):** Kroma BrandMark logo centered horizontally. Clicking it **expands the sidebar** (`onToggleOpen`). Does NOT navigate away. The separate `>` expand arrow button has been **completely removed**.
+- **New Conversation (`[+]` button):** Coral button centered below header. Clicking creates a new conversation. Does NOT expand the sidebar.
+- **Body:** Session history is **completely hidden** when collapsed. The body area shows a **vertical "KROMA AI" editorial branding rail** — the words "KROMA" and "AI" rendered in monospace with `writing-mode: vertical-rl; rotate: 180deg`, spaced with wide letter tracking. Color: "KROMA" at `text-white/15`, "AI" at `#C86342/30`. This is `pointer-events: none; aria-hidden: true` — purely decorative.
+- **Footer:** Single animated coral `w-2 h-2` pulse dot, centered.
+
+#### Session Safety Invariant
+- Clicking the logo in either state **never** deletes a session, clears history, or resets the dataset. Active sessions are always preserved and restorable.
+
+#### Smooth Motion
+- Sidebar width transitions smoothly between `80px` and `288px` using Framer Motion with cubic-bezier easing `[0.16, 1, 0.3, 1]` (duration `0.28s`), fully respecting reduced-motion preferences via `useReducedMotion()`.
+- Expanded/collapsed body content fades in/out with `opacity` transitions; delay `0.05s` on collapsed rail to prevent flash.
+
+### 18.10 Bento Grid Zero-Whitespace Guarantee
 - In [`components/BentoGrid.tsx`](file:///c:/Users/luthf/Downloads/DataAnalyst/components/BentoGrid.tsx), card spans dynamically adapt:
   - 1 Chart: Chart (8 cols) + Highlights (4 cols) = 12 cols
   - 2 Charts: Chart 0 (8) + Chart 1 (4) = 12 cols (Row 1); Highlights = 12 cols (Row 2)
   - 3 Charts: Chart 0 (8) + Chart 1 (4) = 12 cols (Row 1); Chart 2 (6) + Highlights (6) = 12 cols (Row 2)
   - 4 Charts: Chart 0 (8) + Chart 1 (4) = 12 cols (Row 1); Chart 2 (4) + Chart 3 (4) + Highlights (4) = 12 cols (Row 2)
 - Every row mathematically sums to 12 columns, eliminating blank rectangles and unused whitespace.
+
+---
+
+## 19. Windows Desktop Application Architecture (Tauri v2)
+
+### 19.1 Target & Stack Specifications
+- **Target Platform:** Windows 10/11 x64 (MSVC ABI `x86_64-pc-windows-msvc`).
+- **Desktop Shell:** Tauri v2 (`tauri` 2.11.5, `@tauri-apps/cli` 2.11.4).
+- **Embedded Webview:** Microsoft Edge WebView2 Runtime (`153.0.4234.32+`).
+- **Frontend Distribution:** Pure Next.js Static Export (`output: "export"`, `frontendDist: "../out"`).
+- **Application Identifier:** `com.kroma.analytics`
+- **Application Name:** `Kroma`
+- **Window Title:** `Kroma` (no development or framework branding).
+- **Default Window Size:** `1380 x 860` px (`minWidth: 950`, `minHeight: 650`), centered on startup (`center: true`), resizable, Dark theme.
+- **Icon Configuration:** High-resolution multi-size Windows icon package (`src-tauri/icons/icon.ico`, `32x32.png`, `128x128.png`, `128x128@2x.png`) sourced from official Kroma logo brandmark.
+
+### 19.2 Zero-Dependency Runtime Model
+The installed desktop application is completely standalone and self-contained:
+- **No Node.js Required:** The user does not need Node.js, npm, or any JavaScript runtime installed.
+- **No Dev Server Required:** The application loads directly from the embedded static assets bundle inside the binary (`kroma.exe`) via Tauri's native asset protocol (`http://tauri.localhost/`). `localhost:3000` is never contacted in production.
+- **No Terminal Window:** The binary is compiled with `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]`, launching cleanly without opening a console or terminal prompt.
+- **Start Menu Registration:** The NSIS installer creates standard Windows shortcuts in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Kroma.lnk` with the Kroma icon.
+- **Offline-First Frontend:** All React components, Tailwind CSS design tokens, JetBrains Mono/Inter/Outfit font subsets (`.woff2`), and SVG icons are embedded locally in the binary. Zero network connectivity is required for UI rendering.
+
+### 19.3 Local AI Sovereignty (Ollama)
+- Kroma communicates directly with the local Ollama daemon at `http://127.0.0.1:11434/api/chat`.
+- **Explicit CSP Configuration:** `src-tauri/tauri.conf.json` strictly permits connections to local Ollama without wildcard compromises:
+  ```text
+  default-src 'self' http://localhost:11434 http://127.0.0.1:11434;
+  connect-src 'self' http://localhost:11434 http://127.0.0.1:11434;
+  font-src 'self' data:;
+  style-src 'self' 'unsafe-inline';
+  script-src 'self' 'unsafe-eval' 'unsafe-inline';
+  img-src 'self' data: blob:;
+  ```
+- **Graceful Degradation:** If the Ollama daemon is temporarily offline or uninstalled, Kroma does NOT crash. The frontend catches network communication errors and seamlessly switches to the internal deterministic statistical fallback engine.
+
+### 19.4 Safe Build & Collision Prevention Pipeline
+To prevent historical issues where `next dev` and `next build` ran simultaneously against conflicting `.next` directories (causing stale chunks, unstyled HTML, and 404 CSS errors), the build pipeline enforces strict isolation:
+1. **Isolated Build Directories:** Development server writes exclusively to `.next-dev/`, while production build writes to `.next/`.
+2. **Pre-Build Collision Detection (`scripts/pre-tauri-build.mjs`):** Automatically checks if port 3000 is occupied before running `next build`. If an active dev server is detected, it terminates the process cleanly before building.
+3. **Deterministic Asset Audit:** Parses `out/index.html` and audits every referenced CSS stylesheet, JavaScript chunk, font file, and icon on disk. If any asset is missing or has 0 bytes, the build immediately halts before Rust compilation.
+4. **Desktop Orchestration (`scripts/safe-desktop-build.mjs`):** Wraps `tauri build` and prints a structured manifest of generated binary and installer artifacts.
+
+### 19.5 Project Scripts
+- `npm run dev`: Starts local Next.js development server on port 3000.
+- `npm run build`: Compiles production static export into `out/`.
+- `npm run desktop:dev`: Launches native Tauri desktop shell in development mode pointed to `http://localhost:3000`.
+- `npm run desktop:build`: Executes safe pre-build audit, compiles Rust binary in release mode, and generates NSIS and MSI installers.
+- `npm run desktop:clean`: Cleans build caches (`src-tauri/target`, `out`, `.next`, `.next-dev`).
+
+### 19.6 Generated Distribution Artifacts
+- **Standalone Binary:** `src-tauri/target/release/kroma.exe` (~8.8 MB)
+- **NSIS Setup Executable:** `src-tauri/target/release/bundle/nsis/Kroma_1.0.0_x64-setup.exe` (~2.6 MB)
+- **WiX MSI Installer:** `src-tauri/target/release/bundle/msi/Kroma_1.0.0_x64_en-US.msi` (~3.5 MB)
+
+---
+
+## 20. Architectural Decision Records (ADRs)
+
+### ADR — Kroma Desktop Runtime
+
+#### Status
+Accepted & Implemented (v1.0.0)
+
+#### Context
+Kroma is designed as an executive data intelligence and autonomous data analyst platform. The product philosophy requires:
+1. Complete data privacy and sovereignty: Executive CSV spreadsheets and sensitive financial data must never leave the local workstation.
+2. Instantaneous responsiveness: Zero network latency for charting, bento matrix layouts, and statistical filtering.
+3. Native desktop feel: Resizable window, native Windows title bar, Start Menu shortcut, low memory footprint, and independent execution without requiring developers' tools (Node.js, Docker, terminal windows).
+
+#### Decision
+We chose **Next.js Static Export (`output: "export"`) + Tauri v2 + Local Ollama** over Electron or a traditional client-server desktop architecture.
+
+1. **Why Tauri v2 over Electron:**
+   - **Resource Efficiency:** Electron bundles a full Chromium browser (~150MB installer, ~250MB RAM idle). Tauri uses the native Windows WebView2 already present on Windows 10/11, reducing the installer size from 150MB to **2.6MB** and executable size to **8.8MB**, with a runtime memory footprint under 40MB.
+   - **Security Boundary:** Tauri v2 provides Rust-level isolation, strict Content Security Policies, and native OS window management without exposing Node.js APIs inside the webview.
+
+2. **Why Next.js Static Export over Next Server:**
+   - An installed desktop application must not depend on a background Node.js process running a web server on `localhost`. Node servers introduce port conflicts, orphan process leaks, startup delays, and firewall prompts.
+   - Compiling the Next.js React 18 component tree to pre-rendered static HTML/CSS/JS (`out/`) allows Tauri to embed all assets directly into the binary and serve them over an in-memory custom protocol (`http://tauri.localhost/`), guaranteeing sub-millisecond page loads with zero 404s.
+
+3. **Why Local Ollama over Cloud LLMs:**
+   - Enterprise and executive data analysis frequently involves proprietary revenue figures, customer records, and confidential metrics. Direct client-side HTTP communication to local Ollama (`http://127.0.0.1:11434`) preserves complete privacy while leveraging high-performance local GPUs.
+
 

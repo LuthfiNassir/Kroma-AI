@@ -15,11 +15,13 @@ import { cn } from "@/lib/utils";
 interface BentoGridProps {
   dashboardState: DashboardState;
   onSelectChart?: (chart: ChartDataSeries) => void;
+  isSplitView?: boolean;
 }
 
 export const BentoGrid: React.FC<BentoGridProps> = ({
   dashboardState,
   onSelectChart,
+  isSplitView = false,
 }) => {
   const shouldReduceMotion = useReducedMotion();
   const {
@@ -139,10 +141,15 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
         </div>
       </motion.div>
 
-      {/* 2. TOP EXECUTIVE KPI ROW */}
+      {/* 2. TOP EXECUTIVE KPI ROW: Responsive width transitions */}
       <motion.div
         variants={staggerContainer(0.04, 0.02)}
-        className="grid grid-cols-2 lg:grid-cols-4 gap-3.5"
+        className={cn(
+          "grid gap-3.5",
+          isSplitView
+            ? "grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4"
+            : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+        )}
       >
         {kpis.slice(0, 4).map((kpi, idx) => (
           <div key={idx} className="min-w-0">
@@ -151,45 +158,64 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
         ))}
       </motion.div>
 
-      {/* 3. AUTONOMOUS ARCHETYPE BENTO GRID (RESPONSIVE BALANCED PERSPECTIVES) */}
+      {/* 3. AUTONOMOUS ARCHETYPE BENTO GRID (BALANCED PERSPECTIVES) */}
       <motion.div
         variants={staggerContainer(0.05, 0.02)}
         className="grid grid-cols-1 md:grid-cols-12 gap-4"
       >
         {charts.map((chartWidget, idx) => {
-          // Compute adaptive column span so every row sums to exactly 12 columns
-          let colSpanClass = "md:col-span-6 lg:col-span-6";
+          // Compute intentional, balanced column span
           const totalCharts = charts.length;
+          let colSpanClass = "col-span-12 lg:col-span-6";
 
           if (totalCharts === 1) {
-            colSpanClass = "md:col-span-12 lg:col-span-8";
+            colSpanClass = "col-span-12";
           } else if (totalCharts === 2) {
-            colSpanClass = idx === 0 ? "md:col-span-12 lg:col-span-8" : "md:col-span-12 lg:col-span-4";
+            if (isSplitView) {
+              colSpanClass = idx === 0 ? "col-span-12 xl:col-span-7" : "col-span-12 xl:col-span-5";
+            } else {
+              colSpanClass = idx === 0 ? "col-span-12 lg:col-span-7" : "col-span-12 lg:col-span-5";
+            }
           } else if (totalCharts === 3) {
-            if (idx === 0) colSpanClass = "md:col-span-12 lg:col-span-8";
-            else if (idx === 1) colSpanClass = "md:col-span-12 lg:col-span-4";
-            else colSpanClass = "md:col-span-12 lg:col-span-6"; // Pairs with 6-col highlightsCard
+            if (idx === 0) {
+              colSpanClass = isSplitView ? "col-span-12 xl:col-span-7" : "col-span-12 lg:col-span-7";
+            } else if (idx === 1) {
+              colSpanClass = isSplitView ? "col-span-12 xl:col-span-5" : "col-span-12 lg:col-span-5";
+            } else {
+              colSpanClass = isSplitView ? "col-span-12 xl:col-span-6" : "col-span-12 lg:col-span-6";
+            }
           } else if (totalCharts === 4) {
-            if (idx === 0) colSpanClass = "md:col-span-12 lg:col-span-8";
-            else if (idx === 1) colSpanClass = "md:col-span-12 lg:col-span-4";
-            else colSpanClass = "md:col-span-6 lg:col-span-4"; // 4 + 4 + 4 with highlightsCard
+            if (idx === 0) {
+              colSpanClass = isSplitView ? "col-span-12 xl:col-span-7" : "col-span-12 lg:col-span-7";
+            } else if (idx === 1) {
+              colSpanClass = isSplitView ? "col-span-12 xl:col-span-5" : "col-span-12 lg:col-span-5";
+            } else {
+              colSpanClass = isSplitView
+                ? "col-span-12 sm:col-span-6 2xl:col-span-4"
+                : "col-span-12 sm:col-span-6 lg:col-span-4";
+            }
           } else {
             // 5 or more charts
-            if (idx === 0) colSpanClass = "md:col-span-12 lg:col-span-8";
-            else if (idx === 1) colSpanClass = "md:col-span-12 lg:col-span-4";
-            else colSpanClass = "md:col-span-6 lg:col-span-6";
+            if (idx === 0) {
+              colSpanClass = isSplitView ? "col-span-12 xl:col-span-7" : "col-span-12 lg:col-span-7";
+            } else if (idx === 1) {
+              colSpanClass = isSplitView ? "col-span-12 xl:col-span-5" : "col-span-12 lg:col-span-5";
+            } else {
+              colSpanClass = isSplitView ? "col-span-12 xl:col-span-6" : "col-span-12 lg:col-span-6";
+            }
           }
 
           const isHero = idx === 0;
 
           return (
-            <div key={chartWidget.id || `widget_${idx}`} className={colSpanClass}>
+            <div key={chartWidget.id || `widget_${idx}`} className={cn(colSpanClass, "min-w-0")}>
               <ChartCard
                 series={chartWidget}
                 defaultType={chartWidget.type || "bar"}
                 accentColor={idx % 2 === 0 ? "#C86342" : "#A5329E"}
                 secondaryColor={idx % 2 === 0 ? "#A5329E" : "#C86342"}
-                className={cn("h-full", isHero ? "min-h-[360px]" : "min-h-[330px]")}
+                isHero={isHero}
+                className={isHero ? "h-[380px] min-h-[380px] max-h-[380px]" : "h-[340px] min-h-[340px] max-h-[340px]"}
                 onClick={() => onSelectChart && onSelectChart(chartWidget)}
               />
             </div>
@@ -199,23 +225,27 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
         {/* HIGHLIGHTS / EXECUTIVE INTELLIGENCE SUMMARY CARD (Fills row to exactly 12 columns) */}
         {(() => {
           const totalCharts = charts.length;
-          let hlColSpan = "md:col-span-12 lg:col-span-12";
+          let hlColSpan = "col-span-12";
           let isFullWidth = false;
 
           if (totalCharts === 0) {
-            hlColSpan = "md:col-span-12 lg:col-span-12";
+            hlColSpan = "col-span-12";
             isFullWidth = true;
           } else if (totalCharts === 1) {
-            hlColSpan = "md:col-span-12 lg:col-span-4";
+            hlColSpan = isSplitView ? "col-span-12 xl:col-span-6" : "col-span-12 lg:col-span-6";
           } else if (totalCharts === 2) {
-            hlColSpan = "md:col-span-12 lg:col-span-12";
+            hlColSpan = "col-span-12";
             isFullWidth = true;
           } else if (totalCharts === 3) {
-            hlColSpan = "md:col-span-12 lg:col-span-6"; // 6 + 6 = 12 with chart[2]
+            hlColSpan = isSplitView ? "col-span-12 xl:col-span-6" : "col-span-12 lg:col-span-6";
           } else if (totalCharts === 4) {
-            hlColSpan = "md:col-span-12 lg:col-span-4"; // 4 + 4 + 4 = 12 with chart[2] and chart[3]
+            hlColSpan = isSplitView
+              ? "col-span-12 sm:col-span-12 2xl:col-span-4"
+              : "col-span-12 sm:col-span-12 lg:col-span-4";
           } else {
-            hlColSpan = totalCharts % 2 === 1 ? "md:col-span-12 lg:col-span-6" : "md:col-span-12 lg:col-span-12";
+            hlColSpan = totalCharts % 2 === 1
+              ? (isSplitView ? "col-span-12 xl:col-span-6" : "col-span-12 lg:col-span-6")
+              : "col-span-12";
             isFullWidth = totalCharts % 2 === 0;
           }
 
@@ -224,9 +254,11 @@ export const BentoGrid: React.FC<BentoGridProps> = ({
               variants={cardEntrance}
               {...(shouldReduceMotion ? {} : subtleHoverMotion)}
               className={cn(
-                "rounded-3xl bg-[#18191b] border border-white/10 p-5 flex flex-col justify-between shadow-xl relative overflow-hidden",
+                "rounded-3xl bg-[#18191b] border border-white/10 p-5 flex flex-col justify-between shadow-xl relative overflow-hidden min-w-0",
                 hlColSpan,
-                isFullWidth ? "min-h-[170px]" : "min-h-[330px]"
+                isFullWidth
+                  ? "h-[180px] min-h-[180px] max-h-[180px]"
+                  : "h-[340px] min-h-[340px] max-h-[340px]"
               )}
             >
               <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2.5">

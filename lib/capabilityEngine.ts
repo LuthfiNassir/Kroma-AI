@@ -1,4 +1,4 @@
-﻿import {
+import {
   AnalyticalCapabilities,
   ColumnIntelligence,
   DetectedRelationship,
@@ -22,17 +22,16 @@ export function detectAnalyticalCapabilities(input: CapabilityInput): Analytical
   const canForecast =
     temporal.hasTemporal &&
     temporal.observationCount >= 6 &&
-    temporal.isContinuous &&
     measures.length > 0;
 
   const forecastReason = !temporal.hasTemporal
     ? "This dataset does not contain a time dimension, so a time-based forecast is not appropriate."
     : temporal.observationCount < 6
     ? `This dataset does not contain enough consistent history to produce a dependable forecast (${temporal.observationCount} periods; at least 6 required).`
-    : !temporal.isContinuous
-    ? "Time periods contain gaps or irregular intervals that prevent a reliable forward projection."
     : measures.length === 0
     ? "No numeric measures available to project."
+    : !temporal.isContinuous || temporal.isRegular === false
+    ? `6-period directional projection enabled (exploratory; note irregular intervals across ${temporal.observationCount} observations).`
     : `6-month deterministic projection supported across ${temporal.observationCount} ${temporal.frequency} periods.`;
 
   // 2. Trend Analysis

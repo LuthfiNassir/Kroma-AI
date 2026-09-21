@@ -1,4 +1,4 @@
-﻿import {
+import {
   DashboardState,
   DatasetIntelligenceProfile,
   HighlightsCardData,
@@ -90,7 +90,7 @@ export function synthesizeDashboardSpec(
     const endVal = growth ? growth.endValue : (numVals[numVals.length - 1] || 0);
     const growthRate = growth ? growth.totalGrowthPct : (startVal > 0 ? Math.round(((endVal - startVal) / startVal) * 1000) / 10 : 0);
     const timeSpanLabel = temporal.startLabel && temporal.endLabel
-      ? `${temporal.startLabel} -> ${temporal.endLabel}`
+      ? `${temporal.startLabel} → ${temporal.endLabel}`
       : `${temporal.observationCount} periods`;
 
     kpis.push(

@@ -72,23 +72,32 @@ export const MetricCard: React.FC<MetricCardProps> = ({ data, className }) => {
       variants={cardEntrance}
       {...(shouldReduceMotion ? {} : subtleHoverMotion)}
       className={cn(
-        "rounded-2xl bg-[#18191b] border border-white/10 p-4 sm:p-5 flex flex-col justify-between min-h-[120px] min-w-0 shadow-lg hover:border-white/20 transition-colors duration-200 cursor-default",
+        "rounded-2xl bg-[#18191b] border border-white/10 p-3.5 sm:p-4 flex flex-col justify-between h-[125px] min-h-[125px] max-h-[125px] overflow-hidden min-w-0 shadow-lg hover:border-white/20 transition-colors duration-200 cursor-default",
         className
       )}
     >
       {/* Top Label */}
-      <div className="truncate text-[11px] font-semibold text-white/50 uppercase tracking-wider font-mono">
+      <div 
+        title={data.label}
+        className="truncate text-[11px] font-semibold text-white/50 uppercase tracking-wider font-mono shrink-0"
+      >
         {data.label}
       </div>
 
       {/* Middle Value */}
-      <div className="text-2xl lg:text-3xl font-bold text-white tracking-tight font-mono my-1 truncate">
+      <div 
+        title={String(data.value)}
+        className="text-xl sm:text-2xl font-bold text-white tracking-tight font-mono my-0.5 truncate shrink-0"
+      >
         {displayValue}
       </div>
 
-      {/* Bottom Subtext Pill */}
-      <div className="mt-1">
-        <span className="text-xs text-white/70 whitespace-normal leading-tight line-clamp-1 block font-mono">
+      {/* Bottom Subtext with 2-line natural wrapping */}
+      <div className="shrink-0">
+        <span 
+          title={data.subtext}
+          className="text-[11px] sm:text-xs text-white/60 leading-snug line-clamp-2 block font-mono"
+        >
           {data.subtext || "[Verified]"}
         </span>
       </div>

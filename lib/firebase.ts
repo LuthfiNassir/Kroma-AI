@@ -48,7 +48,58 @@ function setLocalSessions(sessions: AnalysisSession[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessions));
-  } catch (err) {
+  } catch (err: any) {
+    const isQuota =
+      err?.name === "QuotaExceededError" ||
+      err?.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      err?.code === 22 ||
+      err?.code === 1014 ||
+      err?.number === -2147024882;
+
+    if (isQuota && sessions.length > 0) {
+      console.warn("Storage quota exceeded. Evicting heavy cached raw rows for older sessions...");
+      try {
+        // Tier 1: Keep at most 15 sessions, truncate tableData in older sessions to 100 rows
+        const pruned = sessions.slice(0, 15).map((sess, idx) => {
+          if (idx === 0) return sess;
+          return {
+            ...sess,
+            dashboardState: {
+              ...sess.dashboardState,
+              tableData: sess.dashboardState?.tableData?.slice(0, 100) || [],
+            },
+          };
+        });
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(pruned));
+        return;
+      } catch (err2) {
+        // Tier 2: Aggressive pruning - keep top 5 sessions, drop non-primary tableData
+        try {
+          const aggressive = sessions.slice(0, 5).map((sess, idx) => {
+            if (idx === 0) {
+              return {
+                ...sess,
+                dashboardState: {
+                  ...sess.dashboardState,
+                  tableData: sess.dashboardState?.tableData?.slice(0, 300) || [],
+                },
+              };
+            }
+            return {
+              ...sess,
+              dashboardState: {
+                ...sess.dashboardState,
+                tableData: [],
+              },
+            };
+          });
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(aggressive));
+          return;
+        } catch (err3) {
+          console.error("Storage quota recovery failed completely:", err3);
+        }
+      }
+    }
     console.error("Failed to write to localStorage:", err);
   }
 }

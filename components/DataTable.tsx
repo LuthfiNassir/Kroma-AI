@@ -320,8 +320,9 @@ export const DataTable: React.FC<DataTableProps> = ({
                     disabled={validCurrentPage <= 1}
                     className="p-1.5 rounded-lg border border-white/10 bg-[#18191b] hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-white cursor-pointer"
                     title="Previous Page"
+                    aria-label="Previous Page"
                   >
-                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
                   </motion.button>
                   <motion.button
                     {...(shouldReduceMotion ? {} : buttonTapMotion)}
@@ -330,8 +331,9 @@ export const DataTable: React.FC<DataTableProps> = ({
                     disabled={validCurrentPage >= totalPages}
                     className="p-1.5 rounded-lg border border-white/10 bg-[#18191b] hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-white cursor-pointer"
                     title="Next Page"
+                    aria-label="Next Page"
                   >
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                   </motion.button>
                 </div>
               </div>

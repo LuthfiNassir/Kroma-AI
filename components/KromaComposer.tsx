@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useMemo, useEffect } from "react";
+import React, { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { SAMPLE_DATASETS, validateTabularInput, extractPromptAndData } from "@/lib/dataEngine";
@@ -45,12 +45,42 @@ const LOADING_STAGES = [
 
 export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const [inputText, setInputText] = useState("");
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const shouldReduceMotion = useReducedMotion();
+
+  // Derived active state: user has typed/pasted content, or attached a CSV file
+  const isActive = inputText.trim().length > 0 || Boolean(attachedFile);
+
+  // Dynamic Auto-Resize: compact resting state (84px) to viewport-aware maximum
+  const adjustTextareaHeight = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const minHeight = 84;
+    // Calculate viewport-aware max height, reserving space for action controls, metadata, and breathing room
+    const available = typeof window !== "undefined" ? window.innerHeight - 260 : 380;
+    const maxHeight = Math.max(160, Math.min(380, available));
+    const scrollHeight = el.scrollHeight;
+    const targetHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
+    el.style.height = `${targetHeight}px`;
+    el.style.overflowY = scrollHeight > maxHeight ? "auto" : "hidden";
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [inputText, adjustTextareaHeight]);
+
+  // Window resize re-calculation
+  useEffect(() => {
+    window.addEventListener("resize", adjustTextareaHeight, { passive: true });
+    return () => window.removeEventListener("resize", adjustTextareaHeight);
+  }, [adjustTextareaHeight]);
 
   // Cycle through intelligent loading messages when analyzing
   useEffect(() => {
@@ -140,7 +170,7 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
       return;
     }
 
-    // 3. Natural Language Prompt without attached file or data (Normal Prompt Handling)
+    // 3. Natural Language Prompt without attached file or data
     onAnalyze({
       rawContent: "",
       fileName: "",
@@ -169,7 +199,7 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
   };
 
   // Sample Dataset Click
-  const handleSampleClick = (sampleKey: "sales" | "department" | "marketing") => {
+  const handleSampleClick = (sampleKey: "sales" | "department" | "marketing" | "sales25") => {
     const raw = SAMPLE_DATASETS[sampleKey];
     onAnalyze({
       rawContent: raw,
@@ -180,225 +210,333 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
   };
 
   return (
-    <div className="relative w-full max-w-[720px] flex flex-col items-center justify-center p-2 sm:p-4">
-      {/* Foreground Content (Centered, Minimal, Non-Scrollable) */}
-      <div className="w-full text-center space-y-4">
-        {/* Subtle Brand Header */}
-        <div className="inline-block">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
-            <BrandMark className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-mono tracking-widest text-[#C86342] uppercase font-semibold">
-              KROMA — AUTONOMOUS DATA ANALYST
-            </span>
-          </div>
-        </div>
-
-        {/* Short Hero Heading */}
-        <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight font-sans">
-          Transform data <br />
-          <span className="text-[#C86342]">into visual intelligence.</span>
-        </h1>
-
-        {/* Short Supporting Text */}
-        <p className="text-xs md:text-sm text-white/60 max-w-md mx-auto leading-relaxed font-sans">
-          Ask a question, paste your data, or attach a CSV.<br className="hidden sm:inline" />
-          Kroma figures out what matters.
-        </p>
-
-        {/* 3. THE UNIVERSAL AI COMPOSER CARD */}
-        <form
-          onSubmit={handleSubmit}
-          className={`rounded-2xl border p-3 sm:p-4 bg-[#18191b]/95 backdrop-blur-md shadow-2xl text-left space-y-2.5 transition-all duration-200 ${isFocused
-            ? "border-[#C86342]/60 shadow-[0_0_25px_rgba(200,99,66,0.12)] bg-[#18191b]"
-            : "border-white/15 hover:border-white/25"
-            }`}
-        >
-          {/* Hidden File Input for Paperclip */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.tsv,.txt"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-
-          {/* Attached File Chip */}
-          <AnimatePresence mode="popLayout">
-            {attachedFile && (
-              <motion.div
-                key="attached-file-chip"
-                variants={chipEntrance}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs font-mono text-white/90"
-              >
-                <FileText className="w-3.5 h-3.5 text-[#C86342]" />
-                <span className="font-semibold truncate max-w-[200px]">{attachedFile.name}</span>
-                <span className="text-white/40 text-[10px]">
-                  ({(attachedFile.size / 1024).toFixed(1)} KB)
+    <div className="w-full max-w-[880px] mx-auto flex flex-col items-center px-3 sm:px-6 transition-all duration-300">
+      {/* ─────────────────────────────────────────────────────────────
+          1. HERO / BRAND HEADER:
+             State 1 Idle: Full Landing Presentation
+             State 2 Active: Minimal Focused Wordmark
+      ───────────────────────────────────────────────────────────── */}
+      <AnimatePresence initial={false}>
+        {!isActive ? (
+          <motion.div
+            key="landing-hero"
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{
+              opacity: 1,
+              height: "auto",
+              marginBottom: 32,
+              transition: {
+                duration: shouldReduceMotion ? 0 : 0.25,
+                ease: [0.16, 1, 0.3, 1],
+              },
+            }}
+            exit={{
+              opacity: 0,
+              height: 0,
+              marginBottom: 0,
+              transition: {
+                duration: shouldReduceMotion ? 0 : 0.2,
+                ease: [0.16, 1, 0.3, 1],
+              },
+            }}
+            className="w-full flex flex-col items-center text-center select-none overflow-hidden"
+          >
+            {/* Subtle KROMA Badge */}
+            <div className="mb-4 sm:mb-5 inline-block">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md shadow-sm">
+                <BrandMark className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-mono tracking-widest text-[#C86342] uppercase font-semibold">
+                  KROMA — AUTONOMOUS DATA ANALYST
                 </span>
-                <button
-                  type="button"
-                  onClick={handleRemoveAttachment}
-                  className="ml-1 p-0.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition cursor-pointer"
-                  title="Remove attachment"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+            </div>
 
-          {/* Multiline Universal Composer Textarea */}
-          <div className="relative">
-            <textarea
-              value={inputText}
-              onChange={(e) => {
-                setInputText(e.target.value);
-                setErrorMessage(null);
-              }}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              onKeyDown={handleKeyDown}
-              rows={3}
-              placeholder={
-                attachedFile
-                  ? `Ask a question about ${attachedFile.name}, or press Ask to analyze...`
-                  : "Ask Kroma anything..."
-              }
-              className="w-full rounded-xl bg-[#212222]/80 border border-white/10 p-3 text-xs font-mono text-white placeholder:text-white/35 focus:outline-none focus:border-[#C86342]/80 transition-colors duration-150 resize-none min-h-[72px] max-h-[160px] overflow-y-auto"
-            />
-          </div>
+            {/* Hero Heading: Primary focal point */}
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[50px] font-bold tracking-tight text-white leading-[1.14] font-display max-w-2xl">
+              Transform data <br />
+              <span className="text-[#C86342]">into visual intelligence.</span>
+            </h1>
 
-          {/* Compact Tabular Detection Badge */}
-          <AnimatePresence>
-            {liveDetection && liveDetection.isValid && (
-              <motion.div
-                key="live-detection-banner"
-                variants={bannerSlideDown}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                className="overflow-hidden"
-              >
-                <div className="rounded-lg bg-white/5 border border-[#C86342]/30 px-3 py-1.5 flex items-center justify-between text-[11px] font-mono text-white/80">
-                  <div className="flex items-center gap-1.5 text-[#C86342] font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>[DATA DETECTED]</span>
-                  </div>
-                  <span className="text-white/60">
-                    {liveDetection.rowCount} rows · {liveDetection.columnCount} columns
-                  </span>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+            {/* Supporting Subtitle: Generous separation */}
+            <p className="mt-3.5 sm:mt-4 text-sm sm:text-base text-white/60 max-w-lg leading-relaxed font-sans font-normal">
+              Ask a question, paste your data, or attach a CSV.
+              <br className="hidden sm:inline" />
+              {" "}Kroma figures out what matters.
+            </p>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="active-header"
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{
+              opacity: 1,
+              height: "auto",
+              marginBottom: 16,
+              transition: {
+                duration: shouldReduceMotion ? 0 : 0.24,
+                ease: [0.16, 1, 0.3, 1],
+              },
+            }}
+            exit={{
+              opacity: 0,
+              height: 0,
+              marginBottom: 0,
+              transition: {
+                duration: shouldReduceMotion ? 0 : 0.18,
+                ease: [0.16, 1, 0.3, 1],
+              },
+            }}
+            className="flex items-center justify-center gap-2 select-none overflow-hidden"
+          >
+            <BrandMark className="w-4 h-4 opacity-85" />
+            <span className="text-md font-mono font-semibold tracking-[0.24em] text-white/70 uppercase">
+              KROMA
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          {/* Error Banner */}
-          <AnimatePresence>
-            {errorMessage && (
-              <motion.div
-                key="error-banner"
-                variants={bannerSlideDown}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                className="overflow-hidden"
-              >
-                <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 flex items-center gap-2 text-xs font-mono text-red-300">
-                  <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                  <span>{errorMessage}</span>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+      {/* ─────────────────────────────────────────────────────────────
+          2. MAIN COMPOSER: Wide, lightweight, dynamic auto-expanding
+      ───────────────────────────────────────────────────────────── */}
+      <form
+        onSubmit={handleSubmit}
+        className={`w-full rounded-2xl border bg-[#18191b]/95 backdrop-blur-xl shadow-2xl transition-all duration-250 p-4 sm:p-5 flex flex-col gap-0.2 ${isActive
+          ? "border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+          : "border-white/15 hover:border-white/25"
+          } ${isFocused
+            ? "border-[#C86342]/70 shadow-[0_0_35px_rgba(200,99,66,0.12)] ring-1 ring-[#C86342]/20"
+            : ""
+          }`}
+      >
+        {/* Hidden File Input for Paperclip */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,.tsv,.txt"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
 
-          {/* Bottom Controls Bar */}
-          <div className="flex items-center justify-between pt-0.5">
-            {/* Left: Attachment Button */}
-            <motion.button
-              {...(shouldReduceMotion ? {} : buttonTapMotion)}
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="px-2.5 py-1.5 rounded-lg border border-white/10 bg-[#212222] text-xs font-mono text-white/70 hover:text-white hover:border-[#C86342]/50 transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Attach CSV or TSV file"
+        {/* Attached File Badge */}
+        <AnimatePresence mode="popLayout">
+          {attachedFile && (
+            <motion.div
+              key="attached-file-chip"
+              variants={chipEntrance}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.06] border border-white/10 text-xs font-mono text-white/90 shadow-sm self-start"
             >
-              <Paperclip className="w-3.5 h-3.5 text-[#C86342]" />
-              <span>Attach CSV</span>
-            </motion.button>
-
-            {/* Right: Submit / Intelligent Loading Stage */}
-            <motion.button
-              {...(shouldReduceMotion ? {} : buttonTapMotion)}
-              type="submit"
-              disabled={isAnalyzing}
-              className="px-4 py-1.5 rounded-xl bg-[#C86342] hover:opacity-90 text-white font-mono text-xs font-semibold transition-opacity flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span className="text-[11px] font-mono">{LOADING_STAGES[loadingStageIndex]}</span>
-                </>
-              ) : (
-                <>
-                  <span>Ask</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </>
-              )}
-            </motion.button>
-          </div>
-        </form>
-
-        {/* 4. Subtle Example Prompts */}
-        <div className="flex flex-col items-center gap-1.5 pt-1 font-mono">
-          <div className="flex items-center justify-center gap-2 flex-wrap text-xs text-white/40">
-            <span>Try asking:</span>
-            {[
-              "Analyze my sales",
-              "Find unusual trends",
-              "Forecast revenue",
-            ].map((promptText) => (
+              <FileText className="w-4 h-4 text-[#C86342]" />
+              <span className="font-semibold truncate max-w-[260px] sm:max-w-[400px]">
+                {attachedFile.name}
+              </span>
+              <span className="text-white/40 text-[11px]">
+                ({(attachedFile.size / 1024).toFixed(1)} KB)
+              </span>
               <button
-                key={promptText}
                 type="button"
-                onClick={() => handlePromptClick(promptText)}
-                className="px-2.5 py-0.5 rounded-md bg-white/5 hover:bg-white/10 hover:text-white border border-white/5 hover:border-white/20 transition-colors cursor-pointer text-[11px] text-white/60"
+                onClick={handleRemoveAttachment}
+                className="ml-1 p-0.5 rounded hover:bg-white/15 text-white/40 hover:text-white transition cursor-pointer"
+                title="Remove attachment"
               >
-                "{promptText}"
+                <X className="w-3.5 h-3.5" />
               </button>
-            ))}
-          </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          {/* Reference Dataset Demo Links */}
-          <div className="flex items-center justify-center gap-2 text-[10px] text-white/30 pt-0.5">
-            <span>or explore reference data:</span>
-            <button
-              type="button"
-              onClick={() => handleSampleClick("sales")}
-              className="hover:text-white/70 underline underline-offset-2 transition-colors cursor-pointer"
-            >
-              Sales (20 mo)
-            </button>
-            <span>·</span>
-            <button
-              type="button"
-              onClick={() => handleSampleClick("department")}
-              className="hover:text-white/70 underline underline-offset-2 transition-colors cursor-pointer"
-            >
-              Department
-            </button>
-            <span>·</span>
-            <button
-              type="button"
-              onClick={() => handleSampleClick("marketing")}
-              className="hover:text-white/70 underline underline-offset-2 transition-colors cursor-pointer"
-            >
-              Marketing
-            </button>
-          </div>
+        {/* Textarea Area: Seamless, internal scrollbar when exceeding max-height */}
+        <div className="w-full relative">
+          <textarea
+            ref={textareaRef}
+            value={inputText}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              setErrorMessage(null);
+            }}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              attachedFile
+                ? `Ask a question about ${attachedFile.name}, or click Ask to analyze...`
+                : "Ask Kroma anything, paste tabular records, or describe your analysis..."
+            }
+            className={`w-full bg-transparent border-0 p-1 text-[13.5px] leading-relaxed text-white placeholder:text-white/35 focus:outline-none focus:ring-0 resize-none transition-[height] duration-75 ${liveDetection ? "font-mono" : "font-sans"
+              }`}
+            style={{
+              minHeight: "84px",
+              maxHeight: "min(380px, calc(100vh - 260px))",
+            }}
+          />
         </div>
-      </div>
+
+        {/* Subtle Detected Data Metadata Row */}
+        <AnimatePresence>
+          {liveDetection && liveDetection.isValid && (
+            <motion.div
+              key="live-detection-banner"
+              variants={bannerSlideDown}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="overflow-hidden"
+            >
+              <div className="pt-3 border-t border-white/[0.07] flex items-center justify-between text-xs font-mono text-white/70 px-1">
+                <div className="flex items-center gap-2 text-[#C86342] font-semibold tracking-wider text-[11px]">
+                  <CheckCircle2 className="w-4 h-4 text-[#C86342]" />
+                  <span>DATA DETECTED</span>
+                </div>
+                <span className="text-white/50 text-[11px]">
+                  {liveDetection.rowCount} rows · {liveDetection.columnCount} columns
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Error Notification */}
+        <AnimatePresence>
+          {errorMessage && (
+            <motion.div
+              key="error-banner"
+              variants={bannerSlideDown}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="overflow-hidden"
+            >
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3.5 py-2 flex items-center gap-2 text-xs font-mono text-red-300">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Bottom Action Controls */}
+        <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.07]">
+          {/* Left: Attach CSV Button */}
+          <motion.button
+            {...(shouldReduceMotion ? {} : buttonTapMotion)}
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3.5 py-2 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] hover:border-white/20 text-xs font-mono text-white/75 hover:text-white transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
+            title="Attach CSV or TSV file"
+          >
+            <Paperclip className="w-4 h-4 text-[#C86342]" />
+            <span>Attach CSV</span>
+          </motion.button>
+
+          {/* Right: Submit / Intelligent Loading Stage */}
+          <motion.button
+            {...(shouldReduceMotion ? {} : buttonTapMotion)}
+            type="submit"
+            disabled={isAnalyzing}
+            className="px-5 py-2 rounded-xl bg-[#C86342] hover:bg-[#ba5938] text-white font-mono text-xs font-semibold tracking-wide transition-all flex items-center gap-2 shadow-md shadow-[#C86342]/20 hover:shadow-[#C86342]/35 active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-[11px] font-mono">{LOADING_STAGES[loadingStageIndex]}</span>
+              </>
+            ) : (
+              <>
+                <span>Ask</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </motion.button>
+        </div>
+      </form>
+
+      {/* ─────────────────────────────────────────────────────────────
+          3. SUGGESTION PROMPTS: State 1 Idle Presentation (Collapses in Active State)
+      ───────────────────────────────────────────────────────────── */}
+      <AnimatePresence initial={false}>
+        {!isActive && (
+          <motion.div
+            key="landing-suggestions"
+            initial={{ opacity: 0, height: 0, marginTop: 0 }}
+            animate={{
+              opacity: 1,
+              height: "auto",
+              marginTop: 28,
+              transition: {
+                duration: shouldReduceMotion ? 0 : 0.25,
+                ease: [0.16, 1, 0.3, 1],
+              },
+            }}
+            exit={{
+              opacity: 0,
+              height: 0,
+              marginTop: 0,
+              transition: {
+                duration: shouldReduceMotion ? 0 : 0.2,
+                ease: [0.16, 1, 0.3, 1],
+              },
+            }}
+            className="w-full flex flex-col items-center text-center font-mono select-none overflow-hidden"
+          >
+            <div className="flex items-center justify-center gap-2 sm:gap-2.5 flex-wrap text-xs text-white/40">
+              <span className="text-white/40 text-[11px] tracking-wide mr-1">Try asking:</span>
+              {[
+                "Analyze my sales",
+                "Find unusual trends",
+                "Forecast revenue",
+              ].map((promptText) => (
+                <button
+                  key={promptText}
+                  type="button"
+                  onClick={() => handlePromptClick(promptText)}
+                  className="px-3.5 py-1.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] hover:text-white border border-white/[0.08] hover:border-white/20 transition-all cursor-pointer text-[11.5px] text-white/65 shadow-sm active:scale-[0.98]"
+                >
+                  "{promptText}"
+                </button>
+              ))}
+            </div>
+
+            {/* Reference Dataset Demo Links */}
+            <div className="flex items-center justify-center gap-2 text-[11px] text-white/35 mt-4 pt-1 flex-wrap">
+              <span>or explore reference data:</span>
+              <button
+                type="button"
+                onClick={() => handleSampleClick("sales25")}
+                className="hover:text-white/80 underline underline-offset-4 decoration-white/20 hover:decoration-[#C86342]/70 transition-colors cursor-pointer text-[#C86342]/90 hover:text-[#C86342]"
+              >
+                Sales (25 Obs)
+              </button>
+              <span>·</span>
+              <button
+                type="button"
+                onClick={() => handleSampleClick("sales")}
+                className="hover:text-white/80 underline underline-offset-4 decoration-white/20 hover:decoration-[#C86342]/70 transition-colors cursor-pointer"
+              >
+                Sales (20 mo)
+              </button>
+              <span>·</span>
+              <button
+                type="button"
+                onClick={() => handleSampleClick("department")}
+                className="hover:text-white/80 underline underline-offset-4 decoration-white/20 hover:decoration-[#C86342]/70 transition-colors cursor-pointer"
+              >
+                Department
+              </button>
+              <span>·</span>
+              <button
+                type="button"
+                onClick={() => handleSampleClick("marketing")}
+                className="hover:text-white/80 underline underline-offset-4 decoration-white/20 hover:decoration-[#C86342]/70 transition-colors cursor-pointer"
+              >
+                Marketing
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

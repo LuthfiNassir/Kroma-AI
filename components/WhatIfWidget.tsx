@@ -194,7 +194,7 @@ export const WhatIfWidget: React.FC<WhatIfWidgetProps> = ({
       </div>
 
       {/* Trajectory Recharts Projection Canvas */}
-      <div className="w-full h-[240px] min-h-[240px] relative font-mono bg-[#212222] p-3 rounded-2xl border border-white/10">
+      <div className="w-full h-[240px] min-h-[240px] max-h-[240px] overflow-hidden shrink-0 relative font-mono bg-[#212222] p-3 rounded-2xl border border-white/10">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>

@@ -5,14 +5,15 @@
   "identifier": "com.kroma.analytics",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "node scripts/pre-tauri-build.mjs",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../out"
   },
   "app": {
     "windows": [
       {
-        "title": "Kroma — Autonomous Data Analyst",
+        "label": "main",
+        "title": "Kroma",
         "width": 1380,
         "height": 860,
         "minWidth": 950,
@@ -20,11 +21,12 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
-        "theme": "Dark"
+        "theme": "Dark",
+        "center": true
       }
     ],
     "security": {
-      "csp": "default-src 'self' http://localhost:11434 http://127.0.0.1:11434; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; img-src 'self' data: blob:;"
+      "csp": "default-src 'self' http://localhost:11434 http://127.0.0.1:11434; connect-src 'self' http://localhost:11434 http://127.0.0.1:11434; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; img-src 'self' data: blob:;"
     }
   },
   "bundle": {
@@ -45,6 +47,10 @@
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": "",
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      },
       "wix": {
         "language": "en-US"
       }

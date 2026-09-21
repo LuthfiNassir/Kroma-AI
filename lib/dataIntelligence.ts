@@ -1,4 +1,4 @@
-﻿import {
+import {
   ColumnIntelligence,
   ColumnNumericStats,
   ColumnValueFrequency,
@@ -11,7 +11,7 @@
 } from "./types";
 import { discoverRelationships } from "./relationshipEngine";
 import { detectAnalyticalCapabilities } from "./capabilityEngine";
-import { parseDatePeriod } from "./temporalUtils";
+import { parseDatePeriod, analyzeDateSpacing } from "./temporalUtils";
 import { calculateGrowthIntelligence, calculateDeterministicForecast } from "./forecastEngine";
 
 // Calculate numeric distribution statistics
@@ -93,35 +93,8 @@ export function analyzeTemporalColumn(data: Record<string, any>[], dateColName: 
   const first = dateValues[0].parsed;
   const last = dateValues[dateValues.length - 1].parsed;
 
-  // Infer frequency from parsed components
-  let freq: "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular" = "irregular";
-  let isContinuous = true;
-  let continuityScore = 0.95;
-
-  const hasMonths = dateValues.every((d) => d.parsed.month !== undefined);
-  const hasQuarters = dateValues.every((d) => d.parsed.quarter !== undefined);
-  const hasDays = dateValues.every((d) => d.parsed.day !== undefined);
-  const hasOnlyYears = dateValues.every((d) => d.parsed.year !== undefined && !d.parsed.month && !d.parsed.quarter);
-
-  if (hasQuarters) {
-    freq = "quarterly";
-  } else if (hasMonths && !hasDays) {
-    freq = "monthly";
-    // Check consecutive monthly intervals
-    for (let i = 1; i < dateValues.length; i++) {
-      const pPrev = dateValues[i - 1].parsed;
-      const pCurr = dateValues[i].parsed;
-      const mDiff = (pCurr.year - pPrev.year) * 12 + (pCurr.month - pPrev.month);
-      if (mDiff !== 1) {
-        isContinuous = false;
-        continuityScore = 0.7;
-      }
-    }
-  } else if (hasDays) {
-    freq = "daily";
-  } else if (hasOnlyYears) {
-    freq = "yearly";
-  }
+  // Use robust date spacing analyzer to infer true frequency & regularity
+  const spacing = analyzeDateSpacing(dateValues);
 
   const startLabel = first.displayLabel;
   const endLabel = last.displayLabel;
@@ -134,9 +107,17 @@ export function analyzeTemporalColumn(data: Record<string, any>[], dateColName: 
     startLabel,
     endLabel,
     observationCount: dateValues.length,
-    frequency: freq,
-    isContinuous,
-    continuityScore: Math.round(continuityScore * 100) / 100,
+    frequency: spacing.frequency,
+    isContinuous: spacing.isRegular,
+    continuityScore: spacing.continuityScore,
+    isRegular: spacing.isRegular,
+    averageIntervalDays: spacing.averageIntervalDays,
+    minIntervalDays: spacing.minIntervalDays,
+    maxIntervalDays: spacing.maxIntervalDays,
+    granularityLabel: spacing.granularityLabel,
+    timeSpanDescription: spacing.timeSpanDescription,
+    spanDays: spacing.spanDays,
+    duplicateTimestampsCount: spacing.duplicateTimestampsCount,
     orderedLabels: dateValues.map((d) => d.parsed.displayLabel),
   };
 }
@@ -328,12 +309,20 @@ export function generateDatasetSummaryNarrative(
       ? measureNames.join(" and ")
       : `${measureNames.slice(0, -1).join(", ")}, and ${measureNames[measureNames.length - 1]}`;
 
-    if (archetype === "FINANCIAL") {
-      datasetType = "Business Performance Time Series";
-      domainDescription = `This dataset tracks monthly business performance ${timeSpanText}. It contains ${metricsJoined}, allowing Kroma to examine growth, relationships between metrics, and future revenue projections.`;
+    if (temporal.isRegular) {
+      if (archetype === "FINANCIAL") {
+        datasetType = "Business Performance Time Series";
+        domainDescription = `This dataset tracks ${temporal.frequency} business performance ${timeSpanText}. It contains ${metricsJoined}, allowing Kroma to examine growth, relationships between metrics, and future revenue projections.`;
+      } else {
+        datasetType = "Longitudinal Time Series";
+        domainDescription = `This dataset records sequential ${temporal.frequency} observations ${timeSpanText} across ${metricsJoined}.`;
+      }
     } else {
-      datasetType = "Longitudinal Time Series";
-      domainDescription = `This dataset records sequential observations ${timeSpanText} across ${metricsJoined}.`;
+      // Irregular observation series
+      datasetType = archetype === "FINANCIAL" ? "Business Performance Observations (Irregular)" : "Dated Observations (Irregular)";
+      const avgInterval = temporal.averageIntervalDays ? Math.round(temporal.averageIntervalDays) : null;
+      const intervalNote = avgInterval ? ` (spaced ~${avgInterval} days on average)` : "";
+      domainDescription = `This dataset records ${temporal.observationCount} dated observations spanning ${temporal.startLabel || temporal.startDate} through ${temporal.endLabel || temporal.endDate}${intervalNote} across ${metricsJoined}. Observation intervals vary, supporting historical trajectory review, multi-metric tracking, and directional projections.`;
     }
   } else if (targets.length > 0) {
     datasetType = "Target Outcome Analysis";
@@ -346,9 +335,11 @@ export function generateDatasetSummaryNarrative(
     domainDescription = `This dataset contains ${rowCount} records and ${colCount} attributes.`;
   }
 
-  // Temporal summary text (Exact, no timezone drift)
+  // Temporal summary text (Exact, no timezone drift, accurate interval semantics)
   const temporalInfo = isTemporal
-    ? `${temporal.observationCount} ${temporal.frequency} periods (${temporal.startLabel || temporal.startDate} to ${temporal.endLabel || temporal.endDate})`
+    ? temporal.isRegular
+      ? `${temporal.observationCount} ${temporal.frequency} periods (${temporal.startLabel || temporal.startDate} to ${temporal.endLabel || temporal.endDate})`
+      : `${temporal.observationCount} observations spanning ${temporal.startLabel || temporal.startDate} to ${temporal.endLabel || temporal.endDate} (irregular intervals, avg ~${temporal.averageIntervalDays ? Math.round(temporal.averageIntervalDays) : "?"}d)`
     : "Static Cross-Sectional (No time dimension)";
 
   // Available analysis labels - only what the dataset truly supports!
@@ -388,7 +379,11 @@ export function generateDatasetSummaryNarrative(
   // Rationale
   let dashboardRationale = "";
   if (isTemporal && capabilities.timeSeriesForecasting?.available) {
-    dashboardRationale = `Kroma prioritizes historical trend lines, growth trajectory, and a deterministic 6-month forecast because the dataset contains a continuous ${temporal.frequency} time dimension without fake category assumptions.`;
+    if (temporal.isRegular) {
+      dashboardRationale = `Kroma prioritizes historical trend lines, growth trajectory, and a deterministic 6-month forecast because the dataset contains a continuous ${temporal.frequency} time dimension without fake category assumptions.`;
+    } else {
+      dashboardRationale = `Kroma presents sequential trend tracking, multi-metric alignment, and a 6-period directional projection, qualifying that observation intervals are irregular across the observed ${temporal.observationCount} points.`;
+    }
   } else if (dimensions.length > 0 && measures.length > 0) {
     dashboardRationale = `Kroma emphasizes comparative category totals and distributions across genuine categories in the data.`;
   } else {
@@ -546,9 +541,9 @@ export function buildDatasetIntelligenceProfile(
     ? calculateGrowthIntelligence(data, temporal.dateColumn, measures[0]) || undefined
     : undefined;
 
-  // Calculate Forecast if capability is available
+  // Calculate Forecast if capability is available (pass temporal context for suitability & exploratory labeling)
   const forecast = (capabilities.timeSeriesForecasting.available && temporal.dateColumn && measures.length > 0)
-    ? calculateDeterministicForecast(data, temporal.dateColumn, measures[0], 6) || undefined
+    ? calculateDeterministicForecast(data, temporal.dateColumn, measures[0], 6, temporal) || undefined
     : undefined;
 
   // Generate the grounded summary narrative

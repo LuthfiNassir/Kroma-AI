@@ -1,6 +1,6 @@
 [package]
 name = "kroma"
-version = "0.1.0"
+version = "1.0.0"
 description = "Kroma Autonomous Data Analyst"
 authors = ["Kroma Analytics"]
 edition = "2021"

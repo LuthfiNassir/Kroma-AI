@@ -10,6 +10,7 @@ interface TilesProps {
 
 export function Tiles({ className, cellSize = 56 }: TilesProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const cellElementsRef = useRef<(HTMLDivElement | null)[]>([]);
   const timeoutsRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
@@ -22,7 +23,10 @@ export function Tiles({ className, cellSize = 56 }: TilesProps) {
     const height = window.innerHeight;
     const cols = Math.ceil(width / cellSize);
     const rows = Math.ceil(height / cellSize);
-    setGridDimensions({ cols, rows });
+    setGridDimensions((prev) => {
+      if (prev.cols === cols && prev.rows === rows) return prev;
+      return { cols, rows };
+    });
   }, [cellSize]);
 
   useEffect(() => {
@@ -36,8 +40,12 @@ export function Tiles({ className, cellSize = 56 }: TilesProps) {
     const { cols, rows } = gridDimensions;
     if (cols === 0 || rows === 0) return;
 
-    // Reset element references array
-    cellElementsRef.current = new Array(cols * rows).fill(null);
+    // Immediately synchronize cell element references from DOM
+    if (gridRef.current && gridRef.current.children.length > 0) {
+      cellElementsRef.current = Array.from(gridRef.current.children) as (HTMLDivElement | null)[];
+    } else if (!cellElementsRef.current || cellElementsRef.current.length !== cols * rows) {
+      cellElementsRef.current = new Array(cols * rows).fill(null);
+    }
 
     let animationFrameId: number;
 
@@ -52,6 +60,11 @@ export function Tiles({ className, cellSize = 56 }: TilesProps) {
         const centerCol = Math.floor(relX / cellSize);
         const centerRow = Math.floor(relY / cellSize);
 
+        // Fallback: if elements are not yet cached, grab from gridRef
+        if (gridRef.current && (!cellElementsRef.current || !cellElementsRef.current[0])) {
+          cellElementsRef.current = Array.from(gridRef.current.children) as (HTMLDivElement | null)[];
+        }
+
         // Interact with cells in a local proximity field (radius of ~2 cells)
         const radius = 2;
         for (let r = centerRow - radius; r <= centerRow + radius; r++) {
@@ -59,7 +72,11 @@ export function Tiles({ className, cellSize = 56 }: TilesProps) {
             if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
 
             const index = r * cols + c;
-            const el = cellElementsRef.current[index];
+            let el = cellElementsRef.current[index];
+            if (!el && gridRef.current) {
+              el = (gridRef.current.children[index] as HTMLDivElement) || null;
+              cellElementsRef.current[index] = el;
+            }
             if (!el) continue;
 
             const dx = c - centerCol;
@@ -148,6 +165,7 @@ export function Tiles({ className, cellSize = 56 }: TilesProps) {
     >
       {/* Grid of Individual Square Cells */}
       <div
+        ref={gridRef}
         className="w-full h-full"
         style={{
           display: "grid",

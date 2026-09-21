@@ -1,4 +1,4 @@
-﻿export type ChartType =
+export type ChartType =
   | "bar"
   | "line"
   | "pie"
@@ -64,9 +64,17 @@ export interface TemporalIntelligence {
   startLabel?: string;
   endLabel?: string;
   observationCount: number;
-  frequency?: "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular";
+  frequency?: "hourly" | "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular";
   isContinuous: boolean;
   continuityScore: number;
+  isRegular?: boolean;
+  averageIntervalDays?: number;
+  minIntervalDays?: number;
+  maxIntervalDays?: number;
+  granularityLabel?: string;
+  timeSpanDescription?: string;
+  spanDays?: number;
+  duplicateTimestampsCount?: number;
   orderedLabels?: string[];
 }
 
@@ -158,6 +166,35 @@ export interface GrowthIntelligence {
   largestIncrease: PeriodChange | null;
   largestDecline: PeriodChange | null;
   recentDirection: "increasing" | "decreasing" | "flat";
+  // Comprehensive statistics separating endpoint change from actual trend
+  firstValue: number;
+  latestValue: number;
+  endpointChangePercent: number;
+  minValue: number;
+  maxValue: number;
+  meanValue: number;
+  medianValue: number;
+  trendDirection: "increasing" | "decreasing" | "flat" | "fluctuating";
+  trendSlope: number;
+  volatility: "low" | "moderate" | "high";
+  volatilityScore: number;
+  isSustained: boolean;
+  narrativeSummary: string;
+}
+
+export interface ForecastSuitability {
+  isSuitable: boolean;
+  confidenceTier: "high" | "moderate" | "exploratory" | "unsuitable";
+  displayTitle: string; // e.g. "6-Period Directional Projection" vs "6-Month Forecast"
+  frequency: "hourly" | "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "irregular";
+  isRegular: boolean;
+  observationCount: number;
+  uniquePeriodsCount: number;
+  spanDays: number;
+  missingnessRate: number;
+  duplicateTimestampsCount: number;
+  reasons: string[];
+  limitations: string;
 }
 
 export interface ForecastPoint {
@@ -180,6 +217,9 @@ export interface ForecastResult {
   confidenceLevel: string;
   limitations: string;
   explanation: string;
+  suitability?: ForecastSuitability;
+  isExploratory?: boolean;
+  displayTitle?: string;
 }
 
 export interface DatasetIntelligenceProfile {
@@ -202,6 +242,7 @@ export interface DatasetIntelligenceProfile {
   archetype: ArchetypeIntelligence;
   growth?: GrowthIntelligence;
   forecast?: ForecastResult;
+  forecastSuitability?: ForecastSuitability;
 }
 
 export interface KPICardData {
@@ -243,6 +284,9 @@ export interface ChartDataSeries {
   yKey?: string;
   analysis?: ChartAnalysis;
   isForecastChart?: boolean;
+  isIndexed?: boolean;
+  isExploratoryForecast?: boolean;
+  forecastBadge?: string;
 }
 
 export interface HighlightItem {
@@ -318,6 +362,12 @@ export interface ChatMessage {
   inlineTable?: Record<string, any>[] | null;
   timestamp: string;
   isError?: boolean;
+  isOfflineCard?: boolean;
+  offlineMetadata?: {
+    endpoint: string;
+    model: string;
+    status: string;
+  };
 }
 
 export interface AnalysisSession {
@@ -325,10 +375,14 @@ export interface AnalysisSession {
   title: string;
   sourceType?: DatasetSourceType;
   createdAt: string;
-  rowCount: number;
-  columnCount: number;
+  updatedAt?: string;
+  rowCount?: number;
+  columnCount?: number;
   messages: ChatMessage[];
-  dashboardState: DashboardState;
+  dashboardState?: DashboardState;
+  icon?: string;
+  isCustomTitle?: boolean;
+  isArchived?: boolean;
 }
 
 export interface AnalysisResponse {
