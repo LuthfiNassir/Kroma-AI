@@ -1429,7 +1429,7 @@ export const Workspace: React.FC = () => {
                 initial={shouldReduceMotion ? undefined : "hidden"}
                 animate={shouldReduceMotion ? undefined : "visible"}
                 exit={shouldReduceMotion ? undefined : "exit"}
-                className="h-full w-full flex flex-col min-h-0 relative max-w-4xl mx-auto"
+                className="h-full w-full flex flex-col min-h-0 relative"
               >
                 <ErrorBoundary fallbackTitle="Chat Engine Error">
                   <ChatPanel
@@ -1499,9 +1499,9 @@ export const Workspace: React.FC = () => {
                   {/* Chat Panel Pane */}
                   <div
                     className={cn(
-                      "h-full transition-all duration-300 border-l border-white/10",
+                      "h-full transition-all duration-300",
                       activeTab === "chat" && "w-full",
-                      activeTab === "split" && "hidden lg:flex lg:w-[40%]",
+                      activeTab === "split" && "hidden lg:flex lg:w-[40%] border-l border-white/10",
                       activeTab === "dashboard" && "hidden"
                     )}
                   >
