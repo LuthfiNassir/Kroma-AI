@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildOllamaSystemPrompt } from "@/lib/ollama";
+import { buildOllamaSystemPrompt, normalizeChartData } from "@/lib/ollama";
+import { validateAndGroundResponse } from "@/lib/responseValidator";
+import { computeDeterministicAnalyticalResult } from "@/lib/deterministicAnalytics";
 
 export const dynamic = "force-static";
 
@@ -20,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { question, schema, sampleData, profile, currentFocus } = body;
+    const { question, schema, sampleData, profile, currentFocus, factPack } = body;
 
     if (!question || !schema) {
       return NextResponse.json(
@@ -29,11 +31,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const effectiveFactPack = factPack || profile?.factPack;
+    const detResult = effectiveFactPack ? computeDeterministicAnalyticalResult(question, effectiveFactPack) : undefined;
+
     const systemPrompt = buildOllamaSystemPrompt({
       schema,
       sampleData: sampleData || [],
       profile,
       currentFocus,
+      factPack: effectiveFactPack,
+      question,
     });
 
     const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
@@ -76,22 +83,69 @@ export async function POST(req: NextRequest) {
       } catch (parseErr) {
         console.warn("LLM JSON output formatting warning, returning structured fallback:", parseErr);
         parsedAnalysis = {
-          explanation:
-            "**[Direct Answer]**\nAnalysis computed successfully from dataset context.\n\n**[Key Drivers & Comparisons]**\n- Core metrics align with baseline statistical patterns.\n- Target variance confirms cohort concentration.\n\n**[Compounding Relationship]**\nVariables exhibit structural co-dependence.\n\n**[Executive Takeaway]**\nPrioritize strategic operational capacity on primary high-yield nodes.",
-          insight: "Data processed locally with Kroma intelligence.",
+          explanation: detResult?.isHandled
+            ? detResult.deterministicExplanation
+            : "**[Direct Answer]**\nAnalysis computed successfully from dataset context.\n\n**[Key Drivers & Comparisons]**\n- Core metrics align with baseline statistical patterns.\n- Target variance confirms cohort concentration.\n\n**[Compounding Relationship]**\nVariables exhibit structural co-dependence.\n\n**[Executive Takeaway]**\nPrioritize strategic operational capacity on primary high-yield nodes.",
+          insight: detResult?.isHandled ? detResult.deterministicInsight : "Data processed locally with Kroma intelligence.",
           action: { type: "ANSWER" },
           sql: null,
-          chartType: "none",
-          chartTitle: "Query Observation",
-          xAxisLabel: "Category",
-          yAxisLabel: "Value",
-          chartData: [],
+          chartType: detResult?.chartSpec ? detResult.chartSpec.chartType : "none",
+          chartTitle: detResult?.chartSpec ? detResult.chartSpec.chartTitle : "Query Observation",
+          xAxisLabel: detResult?.chartSpec ? detResult.chartSpec.xAxisLabel : "Category",
+          yAxisLabel: detResult?.chartSpec ? detResult.chartSpec.yAxisLabel : "Value",
+          chartData: detResult?.chartSpec ? detResult.chartSpec.chartData : [],
         };
       }
+
+      // Ground and validate response with deterministic fact pack
+      const validated = validateAndGroundResponse(
+        parsedAnalysis.explanation || "",
+        parsedAnalysis.insight || "",
+        effectiveFactPack,
+        question
+      );
+      parsedAnalysis.explanation = validated.explanation;
+      parsedAnalysis.insight = validated.insight;
+
+      // Normalize chart data & attach deterministic chartSpec if applicable
+      let finalChartType = parsedAnalysis.chartType || "none";
+      let finalChartTitle = parsedAnalysis.chartTitle || "Analysis Observation";
+      let finalXAxis = parsedAnalysis.xAxisLabel || "Category";
+      let finalYAxis = parsedAnalysis.yAxisLabel || "Value";
+      let finalChartData: Record<string, any>[] = normalizeChartData(parsedAnalysis.chartData);
+
+      if (detResult?.chartSpec) {
+        if (finalChartData.length === 0 || finalChartType === "none" || detResult.intent === "COHORT_BAR_CHART") {
+          finalChartType = detResult.chartSpec.chartType;
+          finalChartTitle = detResult.chartSpec.chartTitle;
+          finalXAxis = detResult.chartSpec.xAxisLabel;
+          finalYAxis = detResult.chartSpec.yAxisLabel;
+          finalChartData = detResult.chartSpec.chartData;
+        }
+      }
+
+      parsedAnalysis.chartType = finalChartType;
+      parsedAnalysis.chartTitle = finalChartTitle;
+      parsedAnalysis.xAxisLabel = finalXAxis;
+      parsedAnalysis.yAxisLabel = finalYAxis;
+      parsedAnalysis.chartData = finalChartData.length > 0 ? finalChartData : [];
 
       return NextResponse.json(parsedAnalysis);
     } catch (ollamaErr: any) {
       console.warn("Local Ollama connection failed:", ollamaErr.message);
+      if (detResult?.isHandled) {
+        return NextResponse.json({
+          explanation: detResult.deterministicExplanation,
+          insight: detResult.deterministicInsight,
+          action: { type: "ANSWER" },
+          sql: null,
+          chartType: detResult.chartSpec ? detResult.chartSpec.chartType : "none",
+          chartTitle: detResult.chartSpec ? detResult.chartSpec.chartTitle : "Deterministic Analysis",
+          xAxisLabel: detResult.chartSpec ? detResult.chartSpec.xAxisLabel : "Category",
+          yAxisLabel: detResult.chartSpec ? detResult.chartSpec.yAxisLabel : "Value",
+          chartData: detResult.chartSpec ? detResult.chartSpec.chartData : [],
+        });
+      }
       return NextResponse.json(
         {
           error:

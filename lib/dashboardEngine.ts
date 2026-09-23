@@ -134,14 +134,18 @@ export function synthesizeDashboardSpec(
         subtext: "Mean across all records",
       },
       {
-        label: targets[0] ? `${targets[0].replace(/_/g, " ").toUpperCase()} RATE` : "DATA COMPLETENESS",
-        value: targets[0]
+        label: profile.targetIntelligence?.displayMetricLabel || (targets[0] ? `${targets[0].replace(/_/g, " ").toUpperCase()} RATE` : "DATA COMPLETENESS"),
+        value: profile.targetIntelligence?.displayMetricValue || (targets[0]
           ? `${((data.filter((r) => Number(r[targets[0]]) === 1).length / Math.max(rowCount, 1)) * 100).toFixed(1)}%`
-          : `${profile.dataQuality.completenessRate}%`,
-        subtext: targets[0] ? "Observed outcome rate" : "0 schema anomalies",
+          : `${profile.dataQuality.completenessRate}%`),
+        subtext: profile.targetIntelligence?.subtext || (targets[0] ? "Observed outcome rate" : "0 schema anomalies"),
       },
       {
-        label: primaryDim ? `LARGEST ${primaryDim.replace(/_/g, " ").toUpperCase()}` : "HIGHEST RECORDED",
+        label: primaryDim
+          ? (primaryDim.toLowerCase().includes("segment")
+              ? "LARGEST SEGMENT BY CUSTOMER COUNT"
+              : `LARGEST ${primaryDim.replace(/_/g, " ").toUpperCase()} BY RECORD COUNT`)
+          : "HIGHEST RECORDED",
         value: primaryDim ? String(topDimVal) : `${currSymbol}${Math.max(...(numVals.length > 0 ? numVals : [0])).toLocaleString()}`,
         subtext: primaryDim ? "Highest representation" : "Maximum value",
       }

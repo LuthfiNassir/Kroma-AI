@@ -199,7 +199,7 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
   };
 
   // Sample Dataset Click
-  const handleSampleClick = (sampleKey: "sales" | "department" | "marketing" | "sales25") => {
+  const handleSampleClick = (sampleKey: "sales" | "department" | "marketing" | "sales25" | "churn") => {
     const raw = SAMPLE_DATASETS[sampleKey];
     onAnalyze({
       rawContent: raw,
@@ -504,8 +504,16 @@ export function KromaComposer({ onAnalyze, isAnalyzing = false }: KromaComposerP
               <span>or explore reference data:</span>
               <button
                 type="button"
-                onClick={() => handleSampleClick("sales25")}
+                onClick={() => handleSampleClick("churn")}
                 className="hover:text-white/80 underline underline-offset-4 decoration-white/20 hover:decoration-[#C86342]/70 transition-colors cursor-pointer text-[#C86342]/90 hover:text-[#C86342]"
+              >
+                Customer Churn (30 Obs)
+              </button>
+              <span>·</span>
+              <button
+                type="button"
+                onClick={() => handleSampleClick("sales25")}
+                className="hover:text-white/80 underline underline-offset-4 decoration-white/20 hover:decoration-[#C86342]/70 transition-colors cursor-pointer"
               >
                 Sales (25 Obs)
               </button>

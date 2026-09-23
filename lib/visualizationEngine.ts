@@ -654,18 +654,29 @@ export function buildVisualizationCards(
     }
   }
 
-  // 3. Target Outcome Comparison (If Binary Target Exists)
+  // 3. Target Outcome Comparison (Binary or Ordinal Target)
   if (targets.length > 0 && dimensions.length > 0) {
     const targetCol = targets[0];
+    const targetIntel = profile.targetIntelligence;
     const primaryDim = dimensions[0];
     const groupTotals: Record<string, number> = {};
     const groupPositives: Record<string, number> = {};
+
+    const isOrdinal = targetIntel?.targetType === "ordinal";
+    const adverseLabel = isOrdinal
+      ? (targetIntel?.distribution.find((d) => d.ordinalRank === 2)?.label || "High").toLowerCase()
+      : "";
 
     data.forEach((r) => {
       const k = String(r[primaryDim] || "").trim();
       if (k) {
         groupTotals[k] = (groupTotals[k] || 0) + 1;
-        if (Number(r[targetCol]) === 1 || String(r[targetCol]).toLowerCase() === "true" || String(r[targetCol]).toLowerCase() === "yes") {
+        const valStr = String(r[targetCol] ?? "").trim().toLowerCase();
+        const isPos = isOrdinal
+          ? valStr === adverseLabel
+          : Number(r[targetCol]) === 1 || valStr === "true" || valStr === "yes";
+
+        if (isPos) {
           groupPositives[k] = (groupPositives[k] || 0) + 1;
         }
       }
@@ -678,13 +689,15 @@ export function buildVisualizationCards(
       }))
       .sort((a, b) => b.value - a.value);
 
+    const chartTitleLabel = isOrdinal ? "High-Risk Rate" : `${targetCol.replace(/_/g, " ")} Rate`;
+
     if (crossData.length > 0) {
       charts.push({
         id: "chart_target_outcome",
         type: "bar",
-        title: `${targetCol.replace(/_/g, " ")} Rate by ${primaryDim.replace(/_/g, " ")}`,
+        title: `${chartTitleLabel} by ${primaryDim.replace(/_/g, " ")}`,
         xAxisLabel: primaryDim.replace(/_/g, " "),
-        yAxisLabel: `${targetCol.replace(/_/g, " ")} Rate (%)`,
+        yAxisLabel: `${chartTitleLabel} (%)`,
         data: crossData,
         xKey: "label",
         yKey: "value",

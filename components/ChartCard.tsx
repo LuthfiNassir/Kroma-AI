@@ -171,19 +171,127 @@ export const ChartCard: React.FC<ChartCardProps> = ({
     return (
       <div
         className={cn(
-          "rounded-3xl bg-[#18191b] border border-white/10 p-6 h-[340px] min-h-[340px] max-h-[340px] flex items-center justify-center text-center text-white/40 font-mono text-xs",
+          "rounded-3xl bg-[#18191b] border border-white/10 p-6 flex items-center justify-center text-center text-white/40 font-mono text-xs",
+          isModal ? "h-full w-full" : isHero ? "h-[380px] min-h-[380px] max-h-[380px]" : "h-[340px] min-h-[340px] max-h-[340px]",
           className
         )}
       >
-        <span>[Insufficient data for visualization]</span>
+        <span>[No chart data available]</span>
       </div>
     );
   }
 
   // Use zoomed data slice if passed (expanded view), otherwise baseline dashboard dataset
   const effectiveData = (zoomedData && zoomedData.length > 0) ? zoomedData : series.data;
-
   const chartType: ChartType = (series.type && series.type !== "none" ? series.type : defaultType) as ChartType;
+
+  // Resolve normalized data items ensuring label and value are accessible
+  const normalizedData = effectiveData.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const label =
+      item[series.xKey || "label"] ??
+      item.label ??
+      item.category ??
+      item.group ??
+      item.name ??
+      item.tier ??
+      item.dimension ??
+      item.x;
+    const val =
+      item[series.yKey || "value"] ??
+      item.value ??
+      item.average ??
+      item.mean ??
+      item.total ??
+      item.count ??
+      item.amount ??
+      item.Monthly_Revenue ??
+      item.monthly_revenue ??
+      item.y;
+
+    return {
+      ...item,
+      label: label !== undefined ? String(label) : "",
+      value: val !== undefined ? Number(val) : NaN,
+    };
+  });
+
+  // Normalized scatter plot points ensuring { x: number, y: number, label: string }
+  const normalizedScatterData = React.useMemo(() => {
+    if (chartType !== "scatter") return [];
+    const ordinalMap: Record<string, number> = {
+      low: 1,
+      medium: 2,
+      med: 2,
+      high: 3,
+    };
+    return effectiveData.map((item, idx) => {
+      if (!item || typeof item !== "object") return { x: 0, y: 0, label: `Record ${idx + 1}` };
+
+      // Resolve X
+      let rawX = item.x ?? item[series.xKey || ""] ?? item.Support_Tickets ?? item.support_tickets;
+      if (rawX === undefined) {
+        for (const [k, v] of Object.entries(item)) {
+          if (typeof v === "number") { rawX = v; break; }
+        }
+      }
+      if (rawX === undefined && item.label !== undefined && !isNaN(Number(item.label))) {
+        rawX = Number(item.label);
+      }
+
+      // Resolve Y
+      let rawY = item.y ?? item[series.yKey || ""] ?? item.Churn_Risk ?? item.churn_risk ?? item.value;
+      if (rawY === undefined) {
+        for (const [k, v] of Object.entries(item)) {
+          if (k !== "x" && typeof v === "number") { rawY = v; break; }
+        }
+      }
+
+      const numX = typeof rawX === "number" ? rawX : (typeof rawX === "string" && ordinalMap[rawX.toLowerCase()] !== undefined ? ordinalMap[rawX.toLowerCase()] : Number(rawX));
+      const numY = typeof rawY === "number" ? rawY : (typeof rawY === "string" && ordinalMap[rawY.toLowerCase()] !== undefined ? ordinalMap[rawY.toLowerCase()] : Number(rawY));
+
+      const label = item.label ? String(item.label) : item.Customer_ID ? String(item.Customer_ID) : `Point ${idx + 1}`;
+
+      return {
+        ...item,
+        x: isNaN(numX) ? 0 : numX,
+        y: isNaN(numY) ? 0 : numY,
+        label,
+        rawX,
+        rawY,
+      };
+    });
+  }, [effectiveData, chartType, series.xKey, series.yKey]);
+
+  // Strict Validation Layer for Bar Charts (Section 7)
+  if (chartType === "bar") {
+    const isValidBar =
+      Array.isArray(normalizedData) &&
+      normalizedData.length > 0 &&
+      normalizedData.every(
+        (d) =>
+          typeof d.label === "string" &&
+          d.label.trim().length > 0 &&
+          typeof d.value === "number" &&
+          !isNaN(d.value) &&
+          isFinite(d.value)
+      );
+
+    if (!isValidBar) {
+      return (
+        <div
+          className={cn(
+            "rounded-3xl bg-[#18191b] border border-white/10 p-6 flex items-center justify-center text-center text-white/40 font-mono text-xs",
+            isModal ? "h-full w-full" : isHero ? "h-[380px] min-h-[380px] max-h-[380px]" : "h-[340px] min-h-[340px] max-h-[340px]",
+            className
+          )}
+        >
+          <span>[No chart data available]</span>
+        </div>
+      );
+    }
+  }
+
   const isMultiCohort = effectiveData.length >= 4;
   const isForecastChart = series.isForecastChart || (effectiveData[0]?.historical !== undefined && effectiveData[0]?.forecast !== undefined);
 
@@ -355,7 +463,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             {chartType === "area" ? (
-              <AreaChart data={effectiveData} margin={{ top: 10, right: 10, left: -10, bottom: isMultiCohort ? 25 : 0 }}>
+              <AreaChart data={effectiveData} margin={{ top: 10, right: 15, left: 10, bottom: isMultiCohort ? 25 : 5 }}>
                 <defs>
                   <linearGradient id={`gradient_${series.id || "card"}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={accentColor} stopOpacity={0.8} />
@@ -373,7 +481,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   textAnchor={isMultiCohort ? "end" : "middle"}
                 />
                 <YAxis
-                  width={42}
+                  width={58}
                   domain={yDomain || ["auto", "auto"]}
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={11}
@@ -408,7 +516,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                 />
               </AreaChart>
             ) : chartType === "line" ? (
-              <LineChart data={effectiveData} margin={{ top: 10, right: 10, left: -10, bottom: isMultiCohort ? 25 : 0 }}>
+              <LineChart data={effectiveData} margin={{ top: 10, right: 15, left: 10, bottom: isMultiCohort ? 25 : 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
                 <XAxis
                   dataKey={xKey}
@@ -420,7 +528,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   textAnchor={isMultiCohort ? "end" : "middle"}
                 />
                 <YAxis
-                  width={42}
+                  width={58}
                   domain={yDomain || ["auto", "auto"]}
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={11}
@@ -535,7 +643,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                 </Pie>
               </PieChart>
             ) : chartType === "scatter" ? (
-              <ScatterChart margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <ScatterChart margin={{ top: 10, right: 15, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
                 <XAxis
                   dataKey="x"
@@ -546,13 +654,20 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   tickFormatter={(val) => formatSpecificMetric(val, xAxisTitle)}
                 />
                 <YAxis
-                  width={42}
+                  width={58}
                   dataKey="y"
                   type="number"
                   domain={yDomain || ["auto", "auto"]}
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={11}
-                  tickFormatter={(val) => formatSpecificMetric(val, yAxisTitle)}
+                  tickFormatter={(val) => {
+                    if (yAxisTitle.toLowerCase().includes("churn_risk") || yAxisTitle.toLowerCase().includes("risk")) {
+                      if (val === 1) return "Low";
+                      if (val === 2) return "Med";
+                      if (val === 3) return "High";
+                    }
+                    return formatSpecificMetric(val, yAxisTitle);
+                  }}
                 />
                 <Tooltip
                   cursor={{ strokeDasharray: "3 3" }}
@@ -567,6 +682,11 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   formatter={(val: any, name: any) => {
                     const isX = String(name).toLowerCase() === "x";
                     const label = isX ? xAxisTitle : yAxisTitle;
+                    if (!isX && (label.toLowerCase().includes("churn_risk") || label.toLowerCase().includes("risk"))) {
+                      if (val === 1) return ["Low", label.replace(/_/g, " ")];
+                      if (val === 2) return ["Medium", label.replace(/_/g, " ")];
+                      if (val === 3) return ["High", label.replace(/_/g, " ")];
+                    }
                     return [
                       formatSpecificMetric(val, label),
                       label.replace(/_/g, " "),
@@ -574,7 +694,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   }}
                 />
                 <Scatter
-                  data={effectiveData}
+                  data={normalizedScatterData}
                   fill={accentColor}
                   isAnimationActive={!shouldReduceMotion}
                   animationDuration={350}
@@ -593,19 +713,19 @@ export const ChartCard: React.FC<ChartCardProps> = ({
               />
             ) : (
               /* Default "bar" or "histogram" */
-              <BarChart data={effectiveData} margin={{ top: 10, right: 10, left: -10, bottom: isMultiCohort ? 30 : 0 }}>
+              <BarChart data={normalizedData} margin={{ top: 10, right: 15, left: 10, bottom: isMultiCohort ? 30 : 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
                 <XAxis
-                  dataKey={xKey}
+                  dataKey="label"
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={10}
                   tickLine={false}
-                  interval={effectiveData.length > 12 ? "preserveStartEnd" : 0}
+                  interval={normalizedData.length > 12 ? "preserveStartEnd" : 0}
                   angle={isMultiCohort ? -25 : 0}
                   textAnchor={isMultiCohort ? "end" : "middle"}
                 />
                 <YAxis
-                  width={42}
+                  width={58}
                   domain={yDomain || ["auto", "auto"]}
                   stroke="rgba(255, 255, 255, 0.4)"
                   fontSize={11}
@@ -628,7 +748,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                   labelFormatter={(label: any) => `${xAxisTitle}: ${label}`}
                 />
                 <Bar
-                  dataKey={yKey}
+                  dataKey="value"
                   fill={accentColor}
                   radius={[8, 8, 0, 0]}
                   isAnimationActive={!shouldReduceMotion}

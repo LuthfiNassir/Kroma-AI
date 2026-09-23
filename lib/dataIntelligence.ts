@@ -1,4 +1,6 @@
 import {
+  CategoricalGroupBreakdown,
+  CategoricalGroupItem,
   ColumnIntelligence,
   ColumnNumericStats,
   ColumnValueFrequency,
@@ -6,13 +8,22 @@ import {
   DatasetArchetype,
   DatasetIntelligenceProfile,
   DatasetSummaryNarrative,
+  DeterministicCorrelation,
+  FullNumericColumnStat,
   SemanticColumnType,
+  TargetOutcomeDistributionItem,
+  TargetOutcomeIntelligence,
+  TargetOutcomeType,
   TemporalIntelligence,
+  VerifiedFactPack,
+  AnalysisContext,
+  DerivedMetricDefinition,
 } from "./types";
-import { discoverRelationships } from "./relationshipEngine";
+import { discoverRelationships, calculateAllCorrelations } from "./relationshipEngine";
 import { detectAnalyticalCapabilities } from "./capabilityEngine";
 import { parseDatePeriod, analyzeDateSpacing } from "./temporalUtils";
 import { calculateGrowthIntelligence, calculateDeterministicForecast } from "./forecastEngine";
+import { generateDatasetFingerprint, validateFactPackConsistency } from "./factPackReconciliation";
 
 // Calculate numeric distribution statistics
 export function calculateNumericStats(values: number[]): ColumnNumericStats | undefined {
@@ -207,10 +218,10 @@ export function profileColumns(data: Record<string, any>[], columns: string[]): 
       };
     }
 
-    // 3. Binary / Target Flag Check
+    // 3. Target / Outcome Flag Check
     const isBinary =
       uniqueCount <= 2 &&
-      uniqueValues.every((v) => v === "0" || v === "1" || v === "true" || v === "false" || v === "yes" || v === "no");
+      uniqueValues.every((v) => ["0", "1", "true", "false", "yes", "no"].includes(v.toLowerCase()));
 
     const isTargetName =
       colLower.includes("stroke") ||
@@ -222,9 +233,25 @@ export function profileColumns(data: Record<string, any>[], columns: string[]): 
       colLower.includes("default") ||
       colLower.includes("outcome") ||
       colLower.includes("attrition") ||
-      colLower.includes("converted");
+      colLower.includes("converted") ||
+      colLower.includes("risk");
 
-    if (isBinary || (isTargetName && uniqueCount <= 5)) {
+    const lowerVals = uniqueValues.map((v) => v.toLowerCase());
+    const isOrdinalScale =
+      (lowerVals.length === 3 &&
+        lowerVals.includes("low") &&
+        (lowerVals.includes("medium") || lowerVals.includes("med") || lowerVals.includes("moderate")) &&
+        lowerVals.includes("high")) ||
+      (lowerVals.length === 4 &&
+        lowerVals.includes("none") &&
+        lowerVals.includes("low") &&
+        lowerVals.includes("medium") &&
+        lowerVals.includes("high")) ||
+      (lowerVals.length >= 3 &&
+        lowerVals.length <= 5 &&
+        lowerVals.some((v) => v.includes("tier") || v.includes("grade") || v.includes("level")));
+
+    if (isBinary) {
       return {
         name: col,
         semanticType: "binary_target",
@@ -235,6 +262,33 @@ export function profileColumns(data: Record<string, any>[], columns: string[]): 
         cardinality: "binary",
         topValues: calculateTopFrequencies(validValues),
         numericStats: isMostlyNumeric ? calculateNumericStats(numericValues) : undefined,
+      };
+    }
+
+    if (isTargetName && (isOrdinalScale || (uniqueCount <= 5 && !isMostlyNumeric))) {
+      return {
+        name: col,
+        semanticType: isOrdinalScale ? "ordinal_target" : "nominal_target",
+        dataType: "string",
+        missingCount,
+        missingRate,
+        uniqueCount,
+        cardinality: "low",
+        topValues: calculateTopFrequencies(validValues),
+      };
+    }
+
+    if (isTargetName && isMostlyNumeric && uniqueCount <= 10) {
+      return {
+        name: col,
+        semanticType: "ordinal_target",
+        dataType: "number",
+        missingCount,
+        missingRate,
+        uniqueCount,
+        cardinality: "low",
+        topValues: calculateTopFrequencies(validValues),
+        numericStats: calculateNumericStats(numericValues),
       };
     }
 
@@ -416,10 +470,21 @@ export function buildDatasetIntelligenceProfile(
   // Profile all columns
   const profiledCols = profileColumns(data, columns);
 
-  // Group columns by semantic class
+  // Group columns by semantic class with business measure prioritization
+  const priorityScore = (name: string): number => {
+    const n = name.toLowerCase();
+    if (n === "revenue" || n === "sales" || n === "monthly_revenue") return 1;
+    if (n === "profit" || n === "net_income") return 2;
+    if (n === "cost" || n === "spend" || n === "expense") return 3;
+    if (n === "units" || n === "orders" || n === "quantity" || n === "volume") return 4;
+    if (n === "discount") return 5;
+    return 10;
+  };
+
   const measures = profiledCols
     .filter((c) => c.semanticType === "additive_numeric" || c.semanticType === "non_additive_numeric")
-    .map((c) => c.name);
+    .map((c) => c.name)
+    .sort((a, b) => priorityScore(a) - priorityScore(b));
 
   // STRICT DIMENSIONS: only genuine categorical columns, never dates, never unique text!
   const dimensions = profiledCols
@@ -427,7 +492,13 @@ export function buildDatasetIntelligenceProfile(
     .map((c) => c.name);
 
   const targets = profiledCols
-    .filter((c) => c.semanticType === "binary_target")
+    .filter(
+      (c) =>
+        c.semanticType === "binary_target" ||
+        c.semanticType === "ordinal_target" ||
+        c.semanticType === "nominal_target" ||
+        c.semanticType === "numeric_target"
+    )
     .map((c) => c.name);
 
   const identifiers = profiledCols
@@ -464,8 +535,13 @@ export function buildDatasetIntelligenceProfile(
     issues: qualityIssues,
   };
 
-  // Discover structural relationships across columns
-  const relationships = discoverRelationships(data, profiledCols, temporal);
+  // Detect Target Outcome Intelligence if target column is present
+  const targetCol = targets[0];
+  const targetColIntel = targetCol ? profiledCols.find((c) => c.name === targetCol) : undefined;
+  const targetIntelligence = targetCol ? detectTargetOutcomeIntelligence(data, targetCol, targetColIntel) : undefined;
+
+  // Discover structural relationships across columns (including ordinal target correlations)
+  const relationships = discoverRelationships(data, profiledCols, temporal, targetIntelligence);
 
   // Detect capabilities
   const capabilities = detectAnalyticalCapabilities({
@@ -478,25 +554,24 @@ export function buildDatasetIntelligenceProfile(
     rowCount,
   });
 
-  // Determine Archetype & Multi-Signal Characteristics
-  const colStr = columns.join(" ").toLowerCase();
-  const secondarySignals: string[] = [];
-
+  // Archetype Classification Heuristic
   let primaryArchetype: DatasetArchetype = "CROSS_SECTIONAL_DISCOVERY";
   let confidence = 0.85;
+  const secondarySignals: string[] = [];
 
+  const colStr = columns.join(" ").toLowerCase();
   const hasFinancialTerms =
-    colStr.includes("amount") ||
-    colStr.includes("sales") ||
     colStr.includes("revenue") ||
-    colStr.includes("price") ||
-    colStr.includes("cost") ||
-    colStr.includes("spend") ||
-    colStr.includes("budget") ||
+    colStr.includes("sales") ||
     colStr.includes("profit") ||
-    colStr.includes("expense");
+    colStr.includes("cost") ||
+    colStr.includes("mrr") ||
+    colStr.includes("arr") ||
+    colStr.includes("salary") ||
+    colStr.includes("price");
 
-  const hasProgressTerms =
+  const hasQuantitativeTerms =
+    colStr.includes("step") ||
     colStr.includes("weight") ||
     colStr.includes("steps") ||
     colStr.includes("reps") ||
@@ -559,6 +634,17 @@ export function buildDatasetIntelligenceProfile(
     primaryArchetype
   );
 
+  // Compute Authoritative VerifiedFactPack
+  const allCorrelations = calculateAllCorrelations(data, profiledCols, targetIntelligence);
+  const factPack = calculateVerifiedFactPack(
+    data,
+    profiledCols,
+    primaryArchetype,
+    dataQuality,
+    targetIntelligence,
+    allCorrelations
+  );
+
   return {
     datasetSummary: {
       rowCount,
@@ -584,5 +670,478 @@ export function buildDatasetIntelligenceProfile(
     },
     growth,
     forecast,
+    targetIntelligence,
+    factPack,
+    analysisContext: factPack.analysisContext,
   };
+}
+
+// Detect Target Outcome Intelligence with full ordinal / binary / nominal handling
+export function detectTargetOutcomeIntelligence(
+  data: Record<string, any>[],
+  targetCol: string,
+  targetColIntel?: ColumnIntelligence
+): TargetOutcomeIntelligence {
+  const rowCount = data.length;
+  const rawValues = data.map((r) => r[targetCol]);
+  const validValues = rawValues.filter((v) => v !== null && v !== undefined && v !== "");
+
+  const counts: Record<string, number> = {};
+  validValues.forEach((v) => {
+    const k = String(v).trim();
+    counts[k] = (counts[k] || 0) + 1;
+  });
+
+  const uniqueKeys = Object.keys(counts);
+  const lowerMap: Record<string, string> = {};
+  uniqueKeys.forEach((k) => {
+    lowerMap[k.toLowerCase()] = k;
+  });
+
+  const isLowMedHigh =
+    uniqueKeys.length === 3 &&
+    "low" in lowerMap &&
+    ("medium" in lowerMap || "med" in lowerMap || "moderate" in lowerMap) &&
+    "high" in lowerMap;
+
+  let targetType: TargetOutcomeType = "nominal";
+  let ordinalMapping: Record<string, number> | undefined;
+  let distribution: TargetOutcomeDistributionItem[] = [];
+  let displayMetricLabel = `${targetCol.replace(/_/g, " ").toUpperCase()} RATE`;
+  let displayMetricValue = "0.0%";
+  let subtext = "";
+  let highRiskRate: number | undefined;
+
+  if (isLowMedHigh) {
+    targetType = "ordinal";
+    const lowKey = lowerMap["low"];
+    const medKey = lowerMap["medium"] || lowerMap["med"] || lowerMap["moderate"];
+    const highKey = lowerMap["high"];
+
+    ordinalMapping = {
+      [lowKey]: 0,
+      [medKey]: 1,
+      [highKey]: 2,
+    };
+
+    const countHigh = counts[highKey] || 0;
+    const countMed = counts[medKey] || 0;
+    const countLow = counts[lowKey] || 0;
+
+    const pctHigh = rowCount > 0 ? Math.round((countHigh / rowCount) * 1000) / 10 : 0;
+    const pctMed = rowCount > 0 ? Math.round((countMed / rowCount) * 1000) / 10 : 0;
+    const pctLow = rowCount > 0 ? Math.round((countLow / rowCount) * 1000) / 10 : 0;
+
+    distribution = [
+      { label: highKey, count: countHigh, percentage: pctHigh, ordinalRank: 2 },
+      { label: medKey, count: countMed, percentage: pctMed, ordinalRank: 1 },
+      { label: lowKey, count: countLow, percentage: pctLow, ordinalRank: 0 },
+    ];
+
+    highRiskRate = pctHigh;
+    displayMetricLabel = "HIGH-RISK RATE";
+    displayMetricValue = `${pctHigh.toFixed(1)}%`;
+    subtext = `${highKey}: ${pctHigh.toFixed(1)}% • ${medKey}: ${pctMed.toFixed(1)}% • ${lowKey}: ${pctLow.toFixed(1)}%`;
+  } else if (
+    uniqueKeys.length <= 2 &&
+    uniqueKeys.every((k) => ["0", "1", "true", "false", "yes", "no"].includes(k.toLowerCase()))
+  ) {
+    targetType = "binary";
+    const posKey = uniqueKeys.find((k) => ["1", "true", "yes"].includes(k.toLowerCase())) || uniqueKeys[0];
+    const posCount = counts[posKey] || 0;
+    const posPct = rowCount > 0 ? Math.round((posCount / rowCount) * 1000) / 10 : 0;
+
+    distribution = uniqueKeys.map((k) => ({
+      label: k,
+      count: counts[k] || 0,
+      percentage: rowCount > 0 ? Math.round(((counts[k] || 0) / rowCount) * 1000) / 10 : 0,
+      ordinalRank: k.toLowerCase() === posKey.toLowerCase() ? 1 : 0,
+    }));
+
+    ordinalMapping = {};
+    uniqueKeys.forEach((k) => {
+      ordinalMapping![k] = k.toLowerCase() === posKey.toLowerCase() ? 1 : 0;
+    });
+
+    displayMetricLabel = `${targetCol.replace(/_/g, " ").toUpperCase()} RATE`;
+    displayMetricValue = `${posPct.toFixed(1)}%`;
+    subtext = `Observed rate for ${posKey}`;
+    highRiskRate = posPct;
+  } else if (targetColIntel && targetColIntel.dataType === "number") {
+    targetType = "numeric";
+    displayMetricLabel = `AVERAGE ${targetCol.replace(/_/g, " ").toUpperCase()}`;
+    displayMetricValue = targetColIntel.numericStats ? targetColIntel.numericStats.mean.toFixed(1) : "N/A";
+    subtext = "Observed continuous target";
+  } else {
+    targetType = "nominal";
+    distribution = uniqueKeys.map((k) => ({
+      label: k,
+      count: counts[k] || 0,
+      percentage: rowCount > 0 ? Math.round(((counts[k] || 0) / rowCount) * 1000) / 10 : 0,
+    })).sort((a, b) => b.count - a.count);
+
+    const top = distribution[0];
+    displayMetricLabel = `${targetCol.replace(/_/g, " ").toUpperCase()} DISTRIBUTION`;
+    displayMetricValue = top ? `${top.label} (${top.percentage}%)` : "N/A";
+    subtext = `${uniqueKeys.length} categories`;
+  }
+
+  return {
+    targetColumn: targetCol,
+    targetType,
+    distribution,
+    highRiskRate,
+    adverseRate: highRiskRate,
+    displayMetricLabel,
+    displayMetricValue,
+    subtext,
+    ordinalMapping,
+  };
+}
+
+// Deterministically build isolated, immutable AnalysisContext
+export function buildAnalysisContext(
+  data: Record<string, any>[],
+  profiledCols: ColumnIntelligence[],
+  archetype: DatasetArchetype,
+  datasetFingerprint: string,
+  sourceDataset?: string
+): AnalysisContext {
+  const rowCount = data.length;
+  const columns = profiledCols.map((c) => c.name);
+  const columnTypes: Record<string, SemanticColumnType | string> = {};
+  profiledCols.forEach((c) => {
+    columnTypes[c.name] = c.semanticType;
+  });
+
+  const dateCol = profiledCols.find((c) => c.semanticType === "date");
+  const numericColumns = profiledCols
+    .filter((c) => c.semanticType === "additive_numeric" || c.semanticType === "non_additive_numeric")
+    .map((c) => c.name);
+
+  // Categorical dimensions (excluding identifiers, dates, and unique text)
+  const categoricalColumns = profiledCols
+    .filter(
+      (c) =>
+        (c.semanticType === "categorical" ||
+          c.semanticType === "ordinal_target" ||
+          c.semanticType === "nominal_target" ||
+          c.semanticType === "high_cardinality_text") &&
+        c.cardinality !== "unique" &&
+        c.name.toLowerCase() !== "date"
+    )
+    .map((c) => c.name);
+
+  const priorityScore = (name: string): number => {
+    const n = name.toLowerCase();
+    if (n === "revenue" || n === "sales" || n === "monthly_revenue") return 1;
+    if (n === "profit" || n === "net_income") return 2;
+    if (n === "cost" || n === "spend" || n === "expense") return 3;
+    if (n === "units" || n === "orders" || n === "quantity" || n === "volume") return 4;
+    if (n === "discount") return 5;
+    return 10;
+  };
+
+  const measures = [...numericColumns].sort((a, b) => priorityScore(a) - priorityScore(b));
+  const dimensions = [...categoricalColumns];
+
+  // Derived metrics definition
+  const derivedMetrics: Record<string, DerivedMetricDefinition> = {};
+
+  // Find Revenue and Cost column candidates (case-insensitive)
+  const revCol = numericColumns.find((c) => /^(revenue|sales|monthly_revenue)$/i.test(c));
+  const costCol = numericColumns.find((c) => /^(cost|spend|expense)$/i.test(c));
+
+  let totalRev = 0;
+  let totalCost = 0;
+  let totalProfit = 0;
+  let profitMargin = 0;
+
+  if (revCol) {
+    totalRev = data.reduce((s, r) => s + (Number(r[revCol]) || 0), 0);
+  }
+  if (costCol) {
+    totalCost = data.reduce((s, r) => s + (Number(r[costCol]) || 0), 0);
+  }
+
+  if (revCol && costCol) {
+    totalProfit = Math.round((totalRev - totalCost) * 100) / 100;
+    const meanProfit = rowCount > 0 ? Math.round((totalProfit / rowCount) * 100) / 100 : 0;
+    profitMargin = totalRev > 0 ? Math.round(((totalProfit / totalRev) * 100) * 10) / 10 : 0;
+
+    derivedMetrics["Profit"] = {
+      name: "Profit",
+      formula: `${revCol} - ${costCol}`,
+      sourceColumns: [revCol, costCol],
+      total: totalProfit,
+      mean: meanProfit,
+      format: "currency",
+    };
+
+    derivedMetrics["Profit_Margin"] = {
+      name: "Profit Margin",
+      formula: `(${revCol} - ${costCol}) / ${revCol}`,
+      sourceColumns: [revCol, costCol],
+      total: profitMargin,
+      mean: profitMargin,
+      format: "percent",
+    };
+  }
+
+  const availableMetrics = Array.from(new Set([
+    ...measures,
+    ...Object.keys(derivedMetrics),
+    ...(derivedMetrics["Profit_Margin"] ? ["Profit Margin", "profit_margin"] : []),
+  ]));
+
+  // Precomputed deterministic facts
+  const deterministicFacts: Record<string, any> = {
+    rowCount,
+    columnCount: columns.length,
+    datasetFingerprint,
+  };
+
+  if (revCol) {
+    deterministicFacts.totalRevenue = Math.round(totalRev * 100) / 100;
+    deterministicFacts.avgRevenue = rowCount > 0 ? Math.round((totalRev / rowCount) * 100) / 100 : 0;
+  }
+  if (costCol) {
+    deterministicFacts.totalCost = Math.round(totalCost * 100) / 100;
+  }
+  if (revCol && costCol) {
+    deterministicFacts.totalProfit = totalProfit;
+    deterministicFacts.profitMargin = profitMargin;
+  }
+
+  const unitsCol = numericColumns.find((c) => /^(units|orders|quantity)$/i.test(c));
+  if (unitsCol) {
+    deterministicFacts.totalUnits = data.reduce((s, r) => s + (Number(r[unitsCol]) || 0), 0);
+  }
+
+  // Dimension summaries (Region, Category, Customer_Type, etc.)
+  const dimensionAggregations: Record<string, any> = {};
+  dimensions.forEach((dim) => {
+    const uniqueGroups = Array.from(new Set(data.map((r) => String(r[dim] ?? "").trim()).filter(Boolean)));
+    const groupData = uniqueGroups.map((grp) => {
+      const matchingRows = data.filter((r) => String(r[dim] ?? "").trim().toLowerCase() === grp.toLowerCase());
+      const count = matchingRows.length;
+      const gRev = revCol ? matchingRows.reduce((s, r) => s + (Number(r[revCol]) || 0), 0) : 0;
+      const gCost = costCol ? matchingRows.reduce((s, r) => s + (Number(r[costCol]) || 0), 0) : 0;
+      const gProfit = revCol && costCol ? Math.round((gRev - gCost) * 100) / 100 : 0;
+      const gMargin = gRev > 0 ? Math.round(((gProfit / gRev) * 100) * 10) / 10 : 0;
+      const gUnits = unitsCol ? matchingRows.reduce((s, r) => s + (Number(r[unitsCol]) || 0), 0) : 0;
+      return {
+        group: grp,
+        count,
+        revenue: Math.round(gRev * 100) / 100,
+        cost: Math.round(gCost * 100) / 100,
+        profit: gProfit,
+        profitMargin: gMargin,
+        units: gUnits,
+      };
+    });
+    dimensionAggregations[dim] = groupData;
+  });
+  deterministicFacts.dimensions = dimensionAggregations;
+
+  const datasetId = `ds_${rowCount}r_${columns.length}c_${datasetFingerprint.slice(0, 8)}`;
+
+  return {
+    datasetId,
+    datasetFingerprint,
+    rowCount,
+    columns,
+    columnTypes,
+    dateColumn: dateCol?.name,
+    numericColumns,
+    categoricalColumns,
+    measures,
+    dimensions,
+    archetype,
+    deterministicFacts,
+    derivedMetrics,
+    availableMetrics,
+    sourceDataset,
+    tableData: data,
+  };
+}
+
+// Compute deterministic VerifiedFactPack from the entire dataset
+export function calculateVerifiedFactPack(
+  data: Record<string, any>[],
+  profiledCols: ColumnIntelligence[],
+  archetype: DatasetArchetype,
+  dataQuality: DataQualityIntelligence,
+  targetIntelligence?: TargetOutcomeIntelligence,
+  correlations: DeterministicCorrelation[] = []
+): VerifiedFactPack {
+  const rowCount = data.length;
+  const colCount = profiledCols.length;
+  const columnNames = profiledCols.map((c) => c.name);
+
+  const numericCols = profiledCols
+    .filter((c) => c.semanticType === "additive_numeric" || c.semanticType === "non_additive_numeric")
+    .map((c) => c.name);
+
+  const candidateDims = profiledCols
+    .filter(
+      (c) =>
+        (c.semanticType === "categorical" ||
+          c.semanticType === "ordinal_target" ||
+          c.semanticType === "nominal_target") &&
+        c.uniqueCount <= 16
+    )
+    .map((c) => c.name);
+
+  const dateCols = profiledCols
+    .filter((c) => c.semanticType === "date")
+    .map((c) => c.name);
+
+  const missingValueCounts: Record<string, number> = {};
+  profiledCols.forEach((c) => {
+    missingValueCounts[c.name] = c.missingCount;
+  });
+
+  // 1. Full Numeric Stats
+  const numericStats: Record<string, FullNumericColumnStat> = {};
+  numericCols.forEach((colName) => {
+    const vals = data
+      .map((r) => Number(r[colName]))
+      .filter((v) => !isNaN(v) && isFinite(v));
+
+    if (vals.length > 0) {
+      vals.sort((a, b) => a - b);
+      const count = vals.length;
+      const sum = vals.reduce((a, b) => a + b, 0);
+      const mean = count > 0 ? Math.round((sum / count) * 100) / 100 : 0;
+      const mid = Math.floor(count / 2);
+      const median = count % 2 === 0 ? (vals[mid - 1] + vals[mid]) / 2 : vals[mid];
+      const min = vals[0];
+      const max = vals[vals.length - 1];
+
+      const variance = vals.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / Math.max(count, 1);
+      const stdDev = Math.round(Math.sqrt(variance) * 100) / 100;
+
+      const q1 = vals[Math.floor(count * 0.25)];
+      const q3 = vals[Math.floor(count * 0.75)];
+      const iqr = Math.round((q3 - q1) * 100) / 100;
+
+      numericStats[colName] = {
+        name: colName,
+        count,
+        sum: Math.round(sum * 100) / 100,
+        mean,
+        median: Math.round(median * 100) / 100,
+        min,
+        max,
+        stdDev,
+        q1,
+        q3,
+        iqr,
+      };
+    }
+  });
+
+  // 2. Group Stats
+  const groupStats: CategoricalGroupBreakdown[] = [];
+  candidateDims.forEach((dim) => {
+    numericCols.forEach((measure) => {
+      const groupsMap: Record<string, number[]> = {};
+      data.forEach((r) => {
+        const g = String(r[dim] ?? "Unspecified").trim();
+        const v = Number(r[measure]);
+        if (!isNaN(v) && isFinite(v)) {
+          if (!groupsMap[g]) groupsMap[g] = [];
+          groupsMap[g].push(v);
+        }
+      });
+
+      const groupItems: CategoricalGroupItem[] = Object.keys(groupsMap).map((g) => {
+        const arr = groupsMap[g];
+        arr.sort((a, b) => a - b);
+        const count = arr.length;
+        const total = arr.reduce((acc, x) => acc + x, 0);
+        const average = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
+        const mid = Math.floor(count / 2);
+        const median = count % 2 === 0 ? (arr[mid - 1] + arr[mid]) / 2 : arr[mid];
+        const pct = rowCount > 0 ? Math.round((count / rowCount) * 1000) / 10 : 0;
+
+        return {
+          group: g,
+          count,
+          percentage: pct,
+          total: Math.round(total * 100) / 100,
+          average,
+          median: Math.round(median * 100) / 100,
+          min: arr[0] ?? 0,
+          max: arr[arr.length - 1] ?? 0,
+        };
+      });
+
+      groupItems.sort((a, b) => b.total - a.total);
+
+      groupStats.push({
+        dimension: dim,
+        measure,
+        groups: groupItems,
+      });
+    });
+  });
+
+  // 3. Limitations
+  const limitations: string[] = [];
+  if (rowCount < 50) {
+    limitations.push(`Small sample size (${rowCount} records): findings describe this observed sample and should not automatically be generalized to the entire customer population.`);
+  }
+  limitations.push("Observational dataset: statistical associations and correlations do not establish causal relationships.");
+  if (targetIntelligence?.targetType === "ordinal") {
+    limitations.push(`Risk categorization (${targetIntelligence.targetColumn}): records are grouped into qualitative risk tiers (${targetIntelligence.distribution.map((d) => d.label).join(", ")}). The dataset contains no predictive probability model to rank or distinguish risk likelihood among individuals in the same tier.`);
+  }
+  if (dateCols.length === 0) {
+    limitations.push("Cross-sectional observation: dataset lacks longitudinal timestamps or historical churn event timestamps.");
+  }
+
+  const datasetFingerprint = generateDatasetFingerprint(data, columnNames);
+
+  const analysisContext = buildAnalysisContext(
+    data,
+    profiledCols,
+    archetype,
+    datasetFingerprint
+  );
+
+  const factPack: VerifiedFactPack = {
+    metadata: {
+      datasetId: analysisContext.datasetId,
+      datasetFingerprint,
+      rowCount,
+      columnCount: colCount,
+      columnNames,
+      numericColumns: numericCols,
+      categoricalColumns: candidateDims,
+      dateColumns: dateCols,
+      missingValueCounts,
+      dataCompleteness: dataQuality.completenessRate,
+      detectedArchetype: archetype,
+      targetColumn: targetIntelligence?.targetColumn,
+      targetType: targetIntelligence?.targetType,
+    },
+    tableData: data,
+    analysisContext,
+    numericStats,
+    groupStats,
+    targetIntelligence,
+    correlations,
+    limitations,
+  };
+
+  // Run deterministic reconciliation validation against exact normalized rows
+  const reconciliation = validateFactPackConsistency(factPack, data);
+  factPack.reconciliationResult = reconciliation;
+
+  if (!reconciliation.isValid) {
+    console.error("[FACT PACK INTEGRITY FAILURE] Fact pack failed reconciliation against raw normalized rows:", reconciliation.errors);
+  }
+
+  return factPack;
 }

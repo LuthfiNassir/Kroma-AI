@@ -22,10 +22,130 @@ export type SemanticColumnType =
   | "identifier"
   | "date"
   | "binary_target"
+  | "ordinal_target"
+  | "nominal_target"
+  | "numeric_target"
   | "additive_numeric"
   | "non_additive_numeric"
   | "categorical"
   | "high_cardinality_text";
+
+export type TargetOutcomeType = "binary" | "ordinal" | "nominal" | "numeric";
+
+export interface TargetOutcomeDistributionItem {
+  label: string;
+  count: number;
+  percentage: number;
+  ordinalRank?: number;
+}
+
+export interface TargetOutcomeIntelligence {
+  targetColumn: string;
+  targetType: TargetOutcomeType;
+  distribution: TargetOutcomeDistributionItem[];
+  highRiskRate?: number;
+  adverseRate?: number;
+  displayMetricLabel: string;
+  displayMetricValue: string;
+  subtext: string;
+  ordinalMapping?: Record<string, number>;
+}
+
+export interface DeterministicCorrelation {
+  variableA: string;
+  variableB: string;
+  coefficient: number;
+  n: number;
+  direction: "positive" | "negative";
+  strength: "strong" | "moderate" | "weak";
+  method: string;
+}
+
+export interface CategoricalGroupItem {
+  group: string;
+  count: number;
+  percentage: number;
+  total: number;
+  average: number;
+  median?: number;
+  min: number;
+  max: number;
+}
+
+export interface CategoricalGroupBreakdown {
+  dimension: string;
+  measure: string;
+  groups: CategoricalGroupItem[];
+}
+
+export interface FullNumericColumnStat {
+  name: string;
+  count: number;
+  sum: number;
+  mean: number;
+  median: number;
+  min: number;
+  max: number;
+  stdDev: number;
+  q1: number;
+  q3: number;
+  iqr: number;
+}
+
+export interface DerivedMetricDefinition {
+  name: string;
+  formula: string;
+  sourceColumns: string[];
+  total?: number;
+  mean?: number;
+  format?: "currency" | "percent" | "number";
+}
+
+export interface AnalysisContext {
+  datasetId: string;
+  datasetFingerprint: string;
+  rowCount: number;
+  columns: string[];
+  columnTypes: Record<string, SemanticColumnType | string>;
+  dateColumn?: string;
+  numericColumns: string[];
+  categoricalColumns: string[];
+  measures: string[];
+  dimensions: string[];
+  archetype: DatasetArchetype;
+  deterministicFacts: Record<string, any>;
+  derivedMetrics: Record<string, DerivedMetricDefinition>;
+  availableMetrics: string[];
+  sourceDataset?: string;
+  tableData?: Record<string, any>[];
+  factPack?: VerifiedFactPack;
+}
+
+export interface VerifiedFactPack {
+  metadata: {
+    datasetId?: string;
+    datasetFingerprint: string;
+    rowCount: number;
+    columnCount: number;
+    columnNames: string[];
+    numericColumns: string[];
+    categoricalColumns: string[];
+    dateColumns: string[];
+    missingValueCounts: Record<string, number>;
+    dataCompleteness: number;
+    detectedArchetype: DatasetArchetype;
+    targetColumn?: string;
+    targetType?: TargetOutcomeType;
+  };
+  tableData?: Record<string, any>[];
+  analysisContext?: AnalysisContext;
+  numericStats: Record<string, FullNumericColumnStat>;
+  groupStats: CategoricalGroupBreakdown[];
+  targetIntelligence?: TargetOutcomeIntelligence;
+  correlations: DeterministicCorrelation[];
+  limitations: string[];
+  reconciliationResult?: any;
+}
 
 export interface ColumnValueFrequency {
   value: string;
@@ -243,6 +363,9 @@ export interface DatasetIntelligenceProfile {
   growth?: GrowthIntelligence;
   forecast?: ForecastResult;
   forecastSuitability?: ForecastSuitability;
+  targetIntelligence?: TargetOutcomeIntelligence;
+  factPack?: VerifiedFactPack;
+  analysisContext?: AnalysisContext;
 }
 
 export interface KPICardData {
@@ -349,6 +472,7 @@ export interface DashboardState {
     deltaAmount?: number;
     description?: string;
   };
+  analysisContext?: AnalysisContext;
 }
 
 export interface ChatMessage {
@@ -380,6 +504,7 @@ export interface AnalysisSession {
   columnCount?: number;
   messages: ChatMessage[];
   dashboardState?: DashboardState;
+  analysisContext?: AnalysisContext;
   icon?: string;
   isCustomTitle?: boolean;
   isArchived?: boolean;

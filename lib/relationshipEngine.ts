@@ -1,6 +1,8 @@
 import {
   ColumnIntelligence,
   DetectedRelationship,
+  DeterministicCorrelation,
+  TargetOutcomeIntelligence,
   TemporalIntelligence,
 } from "./types";
 
@@ -32,18 +34,102 @@ export function calculatePearsonCorrelation(x: number[], y: number[]): number {
   return Math.round((numerator / denominator) * 1000) / 1000;
 }
 
+// Computes all verified correlations (numeric-to-numeric and numeric-to-ordinal target) for the Fact Pack
+export function calculateAllCorrelations(
+  data: Record<string, any>[],
+  columns: ColumnIntelligence[],
+  targetIntel?: TargetOutcomeIntelligence
+): DeterministicCorrelation[] {
+  const correlations: DeterministicCorrelation[] = [];
+  const measures = columns.filter(
+    (c) => c.semanticType === "additive_numeric" || c.semanticType === "non_additive_numeric"
+  );
+
+  // 1. Numeric <-> Numeric Correlations
+  if (measures.length >= 2) {
+    for (let i = 0; i < measures.length; i++) {
+      for (let j = i + 1; j < measures.length; j++) {
+        const colA = measures[i];
+        const colB = measures[j];
+
+        const pairs = data
+          .map((r) => ({ a: Number(r[colA.name]), b: Number(r[colB.name]) }))
+          .filter((p) => !isNaN(p.a) && !isNaN(p.b) && isFinite(p.a) && isFinite(p.b));
+
+        if (pairs.length >= 5) {
+          const r = calculatePearsonCorrelation(
+            pairs.map((p) => p.a),
+            pairs.map((p) => p.b)
+          );
+          const strength = Math.abs(r) >= 0.7 ? "strong" : Math.abs(r) >= 0.4 ? "moderate" : "weak";
+          correlations.push({
+            variableA: colA.name,
+            variableB: colB.name,
+            coefficient: r,
+            n: pairs.length,
+            direction: r >= 0 ? "positive" : "negative",
+            strength,
+            method: "Pearson (numeric-to-numeric)",
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Numeric <-> Ordinal Target Correlations
+  if (targetIntel && targetIntel.targetType === "ordinal" && targetIntel.ordinalMapping) {
+    const mapping = targetIntel.ordinalMapping;
+    measures.forEach((col) => {
+      const pairs = data
+        .map((r) => {
+          const rawTarget = String(r[targetIntel.targetColumn] ?? "").trim();
+          const targetRank = mapping[rawTarget];
+          const val = Number(r[col.name]);
+          return { a: val, b: targetRank };
+        })
+        .filter((p) => !isNaN(p.a) && isFinite(p.a) && p.b !== undefined && !isNaN(p.b));
+
+      if (pairs.length >= 5) {
+        const r = calculatePearsonCorrelation(
+          pairs.map((p) => p.a),
+          pairs.map((p) => p.b)
+        );
+        const strength = Math.abs(r) >= 0.7 ? "strong" : Math.abs(r) >= 0.4 ? "moderate" : "weak";
+        correlations.push({
+          variableA: col.name,
+          variableB: targetIntel.targetColumn,
+          coefficient: r,
+          n: pairs.length,
+          direction: r >= 0 ? "positive" : "negative",
+          strength,
+          method: "Pearson on ordinal target encoding",
+        });
+      }
+    });
+  }
+
+  return correlations;
+}
+
 // Discovers deep structural relationships within the dataset
 export function discoverRelationships(
   data: Record<string, any>[],
   columns: ColumnIntelligence[],
-  temporal: TemporalIntelligence
+  temporal: TemporalIntelligence,
+  targetIntel?: TargetOutcomeIntelligence
 ): DetectedRelationship[] {
   const relationships: DetectedRelationship[] = [];
   const measures = columns.filter(
     (c) => c.semanticType === "additive_numeric" || c.semanticType === "non_additive_numeric"
   );
   const dimensions = columns.filter((c) => c.semanticType === "categorical");
-  const targets = columns.filter((c) => c.semanticType === "binary_target");
+  const targets = columns.filter(
+    (c) =>
+      c.semanticType === "binary_target" ||
+      c.semanticType === "ordinal_target" ||
+      c.semanticType === "nominal_target" ||
+      c.semanticType === "numeric_target"
+  );
 
   // 1. Numeric ↔ Numeric Correlations (Scatter / Regression)
   if (measures.length >= 2) {
@@ -84,6 +170,45 @@ export function discoverRelationships(
         }
       }
     }
+  }
+
+  // 1b. Numeric ↔ Ordinal Target Relationships
+  if (targetIntel && targetIntel.targetType === "ordinal" && targetIntel.ordinalMapping) {
+    const mapping = targetIntel.ordinalMapping;
+    measures.forEach((col) => {
+      const pairs = data
+        .map((r) => {
+          const rawTarget = String(r[targetIntel.targetColumn] ?? "").trim();
+          const targetRank = mapping[rawTarget];
+          const val = Number(r[col.name]);
+          return { a: val, b: targetRank };
+        })
+        .filter((p) => !isNaN(p.a) && isFinite(p.a) && p.b !== undefined && !isNaN(p.b));
+
+      if (pairs.length >= 5) {
+        const r = calculatePearsonCorrelation(
+          pairs.map((p) => p.a),
+          pairs.map((p) => p.b)
+        );
+        const strengthDesc =
+          Math.abs(r) > 0.7
+            ? "strong association"
+            : Math.abs(r) > 0.4
+            ? "moderate association"
+            : "mild association";
+
+        relationships.push({
+          id: `rel_ord_${col.name}_${targetIntel.targetColumn}`,
+          type: "numeric_correlation",
+          sourceColumn: col.name,
+          targetColumn: targetIntel.targetColumn,
+          strength: r,
+          description: `${col.name} has a ${strengthDesc} ${r > 0 ? "positive" : "negative"} association with ordinal ${targetIntel.targetColumn} (r = ${r.toFixed(3)}, n = ${pairs.length}).`,
+          recommendedChart: "scatter",
+          insights: `Ordinal Pearson coefficient (${r > 0 ? "+" : ""}${r.toFixed(3)}) indicates ${r > 0 ? "higher values correlate with higher risk" : "higher values correlate with lower risk"}.`,
+        });
+      }
+    });
   }
 
   // 2. Temporal ↔ Numeric Trends (Line / Area / Forecast)

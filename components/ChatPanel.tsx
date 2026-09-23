@@ -19,7 +19,6 @@ import {
 import { ChatMessage, DatasetSourceType } from "@/lib/types";
 import { ChartCard } from "./ChartCard";
 import { BrandMark } from "@/components/ui/BrandMark";
-import { extractPromptAndData } from "@/lib/dataEngine";
 import {
   chatMessageUser,
   chatMessageAssistant,
@@ -173,21 +172,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     const targetPrompt = promptToSend || inputPrompt;
     if (!targetPrompt.trim() || isLoading) return;
 
-    // Check if user pasted tabular data directly into the chat
-    if (onAttachData) {
-      const extracted = extractPromptAndData(targetPrompt.trim());
-      if (extracted.hasTable && extracted.tableText) {
-        onAttachData({
-          rawContent: extracted.tableText,
-          fileName: extracted.title,
-          sourceType: "pasted",
-          userPrompt: extracted.prompt,
-        });
-        setInputPrompt("");
-        return;
-      }
-    }
-
+    // A normal Chat message must NEVER replace, mutate, clear, or recreate the active dataset.
+    // Chat input is strictly routed to onSendMessage for AI conversation against the existing dataset.
     onSendMessage(targetPrompt.trim());
     setInputPrompt("");
   };

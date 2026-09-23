@@ -59,14 +59,19 @@ export function validateTabularInput(rawText: string): TabularValidationResult {
 
   const fields = (parsed.meta.fields || []).map((f) => (f ? f.trim() : "")).filter((f) => f.length > 0);
   const rows = (parsed.data || []).filter((r) => r && Object.keys(r).length > 0);
+  const detectedDelimiter = parsed.meta.delimiter;
 
-  if (fields.length === 0) {
+  // A valid tabular dataset for analytical intelligence requires at least 2 columns with standard delimiters (comma, tab, semicolon, pipe)
+  const validDelimiters = [",", "\t", ";", "|"];
+  const hasValidDelimiter = Boolean(detectedDelimiter && validDelimiters.includes(detectedDelimiter));
+
+  if (fields.length < 2 || !hasValidDelimiter) {
     return {
       isValid: false,
-      error: "Couldn't read this as tabular data. Check that your first row contains column names and that each row uses the same separators.",
+      error: "Tabular data requires at least two columns separated by commas, tabs, semicolons, or pipes.",
       rowCount: 0,
-      columnCount: 0,
-      columns: [],
+      columnCount: fields.length,
+      columns: fields,
       previewRows: [],
     };
   }
@@ -88,7 +93,7 @@ export function validateTabularInput(rawText: string): TabularValidationResult {
     columnCount: fields.length,
     columns: fields,
     previewRows: rows.slice(0, 5),
-    delimiter: parsed.meta.delimiter,
+    delimiter: detectedDelimiter,
   };
 }
 
@@ -107,9 +112,9 @@ export function extractPromptAndData(text: string): ExtractedInput {
     return { hasTable: false, sourceType: "pasted", title: "dataset" };
   }
 
-  // 1. Check if the entire text is a valid tabular dataset
+  // 1. Check if the entire text is a valid tabular dataset (strictly requiring >=2 columns with valid separators)
   const wholeCheck = validateTabularInput(trimmed);
-  if (wholeCheck.isValid && wholeCheck.rowCount >= 1) {
+  if (wholeCheck.isValid && wholeCheck.rowCount >= 1 && wholeCheck.columnCount >= 2) {
     return {
       hasTable: true,
       tableText: trimmed,
@@ -265,6 +270,33 @@ Feb-2026,Electronics,45000
 Feb-2026,Clothing,19000
 Feb-2026,Home,13500`,
 
+  ecommerce: `Date,Order_ID,Region,Category,Product,Units,Revenue,Cost,Discount,Customer_Type
+2026-01-05,ORD-1001,North,Electronics,Server & Laptops,10,14350,10320,0.05,Returning
+2026-01-12,ORD-1002,West,Furniture,Executive Desk,4,3600,2400,0.05,New
+2026-01-19,ORD-1003,East,Electronics,Ultrabook,5,5800,4040,0.05,Returning
+2026-01-26,ORD-1004,North,Office,Laser Printer,4,2400,1560,0.00,New
+2026-02-02,ORD-1005,West,Electronics,Laptop Pro,5,6200,4340,0.05,Returning
+2026-02-09,ORD-1006,East,Furniture,Ergonomic Chair,6,2400,1600,0.00,New
+2026-02-16,ORD-1007,North,Office,Scanner,5,2100,1365,0.05,Returning
+2026-02-23,ORD-1008,West,Electronics,Monitor 4K,8,4400,3080,0.05,New
+2026-03-02,ORD-1009,East,Furniture,Standing Desk,4,2850,1900,0.05,Returning
+2026-03-09,ORD-1010,South,Electronics,Smartphone,5,3200,2160,0.05,Returning
+2026-03-16,ORD-1011,North,Office,Paper Shredder,6,1800,1170,0.00,New
+2026-03-23,ORD-1012,West,Electronics,Tablet,7,3800,2650,0.00,Returning
+2026-03-30,ORD-1013,East,Electronics,Dual Monitor,7,5450,3800,0.05,New
+2026-04-06,ORD-1014,South,Furniture,Filing Cabinet,4,1500,1000,0.05,New
+2026-04-13,ORD-1015,South,Electronics,Tablet,6,2800,1900,0.00,New
+2026-04-20,ORD-1016,North,Office,Workstation Supplies,8,3800,2470,0.10,Returning
+2026-04-27,ORD-1017,West,Electronics,Smart Device,6,5100,3560,0.10,New
+2026-05-04,ORD-1018,East,Furniture,Bookshelf,5,1800,1200,0.00,New
+2026-05-11,ORD-1019,South,Electronics,Wireless Earbuds,8,1900,1280,0.05,Returning
+2026-05-15,ORD-1020,South,Electronics,Smart Watch,6,2400,1620,0.00,New
+2026-05-18,ORD-1021,North,Office,Laminator & Accessories,5,2500,1625,0.05,New
+2026-05-20,ORD-1022,South,Electronics,Bluetooth Speaker,7,2100,1420,0.05,Returning
+2026-05-22,ORD-1023,West,Furniture,Conference Table,3,2700,1800,0.05,Returning
+2026-05-26,ORD-1024,East,Electronics,Tablet Pro,6,5500,3830,0.10,Returning
+2026-05-29,ORD-1025,South,Electronics,USB-C Accessories,58,3600,2450,0.10,Returning`,
+
   sales25: `Date,Revenue,Cost,Units
 2026-01-05,1200,700,2
 2026-01-12,1800,1050,3
@@ -291,4 +323,36 @@ Feb-2026,Home,13500`,
 2026-05-22,5400,3150,9
 2026-05-26,4900,2850,8
 2026-05-29,7800,4500,13`,
+
+  churn: `Customer_ID,Segment,Monthly_Revenue,Usage_Hours,Support_Tickets,NPS,Feature_Adoption,Tenure_Months,Churn_Risk
+C001,Enterprise,1076.84,27.4,1,59,80,32,Low
+C002,Mid-Market,120.0,28.8,3,38,56,15,Medium
+C003,Enterprise,1350.83,80.2,1,72,90,59,Low
+C004,Enterprise,1190.36,67.2,1,74,90,28,Low
+C005,SMB,35.0,10.5,7,11,39,4,High
+C006,SMB,135.0,36.1,5,38,66,23,Medium
+C007,Enterprise,1428.98,80.7,1,67,96,35,Low
+C008,Mid-Market,42.0,9.7,9,18,45,3,High
+C009,Enterprise,1402.29,85.0,3,80,77,29,Low
+C010,Mid-Market,145.0,31.9,4,42,68,21,Medium
+C011,Enterprise,1517.37,108.0,2,82,92,59,Low
+C012,SMB,45.0,10.5,8,19,39,5,High
+C013,Enterprise,1567.39,83.6,2,82,94,29,Low
+C014,SMB,155.0,24.1,5,35,72,13,Medium
+C015,Enterprise,1353.3,52.5,1,65,93,26,Low
+C016,Enterprise,1453.64,73.6875,2,70,80,52,Low
+C017,SMB,49.0,11.7,6,18,35,2,High
+C018,Mid-Market,175.0,30.7,6,50,62,22,Medium
+C019,Mid-Market,329.0,85.3,2,73,88,52,Low
+C020,SMB,260.1,73.6875,2,59,92,40,Low
+C021,Mid-Market,307.86,84.2,2,81,89,39,Low
+C022,SMB,185.0,26.7,5,47,64,17,Medium
+C023,Mid-Market,52.0,10.9,6,6,25,6,High
+C024,SMB,447.11,70.2,2,73,87,33,Low
+C025,Mid-Market,372.48,50.3,2,74,89,59,Low
+C026,Mid-Market,195.0,25.6,4,54,52,18,Medium
+C027,SMB,265.46,73.6875,2,82,83,53,Low
+C028,Mid-Market,320.99,83.3,3,62,92,30,Low
+C029,SMB,56.0,9.7,8,17,40,7,High
+C030,SMB,208.0,25.1,5,41,70,11,Medium`,
 };
