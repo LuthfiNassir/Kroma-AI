@@ -106,7 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <BrandMark className="w-7 h-7 shrink-0" priority />
                 <div className="min-w-0">
                   <h1 className="text-sm font-bold text-white tracking-tight leading-none truncate font-mono">
-                    Kroma
+                    Kroma AI
                   </h1>
                   <p className="text-[10px] text-white/40 uppercase tracking-wider font-mono mt-1 truncate">
                     Autonomous Data Analyst
@@ -349,7 +349,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
               >
                 <span
-                  className="text-[50px] font-semibold font-sans text-white/5 uppercase tracking-[0.22em]"
+                  className="text-[50px] font-extrabold font-sans text-white/5 uppercase tracking-[0.22em]"
                 >
                   KROMA AI
                 </span>

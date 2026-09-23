@@ -35,6 +35,7 @@ import { ChatPanel } from "./ChatPanel";
 import { KromaComposer } from "./KromaComposer";
 import { ChartModal } from "./ChartModal";
 import { DeleteSessionModal } from "./DeleteSessionModal";
+import { TitleBar } from "./TitleBar";
 import { Tiles } from "./ui/Tiles";
 import { ErrorBoundary } from "./ErrorBoundary";
 import {
@@ -1263,8 +1264,12 @@ export const Workspace: React.FC = () => {
   const isDataAnalysisMode = Boolean(activeSession && activeSession.dashboardState);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#212222] text-white relative">
-      {/* Sidebar Drawer */}
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#212222] text-white relative">
+      {/* Desktop Window Title Bar */}
+      <TitleBar />
+
+      <div className="flex-1 flex min-h-0 w-full overflow-hidden relative">
+        {/* Sidebar Drawer */}
       <Sidebar
         sessions={sessions}
         activeSessionId={activeSession?.sessionId || null}
@@ -1524,6 +1529,7 @@ export const Workspace: React.FC = () => {
           </AnimatePresence>
         </div>
       </main>
+    </div>
 
       {/* Chart Visual Deep-Dive Modal */}
       <ChartModal
